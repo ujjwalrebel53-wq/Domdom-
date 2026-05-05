@@ -345,9 +345,9 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   // ── Codespace Modal ────────────────────────────────────────
+  // ── Codespace IDE Modal ────────────────────────────────────
   const codespaceBtn   = document.getElementById('codespaceBtn');
   const codespaceModal = document.getElementById('codespaceModal');
-  const closeCodespaceModal = document.getElementById('closeCodespaceModal');
 
   function openCodespaceModal() {
     if (codespaceModal) {
@@ -370,15 +370,11 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  if (closeCodespaceModal) {
-    closeCodespaceModal.addEventListener('click', closeCodespaceModalFn);
-  }
-
-  if (codespaceModal) {
-    codespaceModal.addEventListener('click', e => {
-      if (e.target === codespaceModal) closeCodespaceModalFn();
-    });
-  }
+  // Close via green dot and ✕ button
+  ['closeCodespaceModal', 'closeCodespaceModal2'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('click', closeCodespaceModalFn);
+  });
 
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && codespaceModal && codespaceModal.classList.contains('show')) {
@@ -386,27 +382,197 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
 
-  // Launch / Learn more buttons inside Codespace modal
-  const csLaunchBtn = document.getElementById('csLaunchBtn');
-  const csLearnBtn  = document.getElementById('csLearnBtn');
+  // ── IDE: Tab switching ──────────────────────────────────────
+  const IDE_FILES = {
+    'app.js': `<span class="tok-comment">// Rebel Codespace — AI-powered editor</span>\n<span class="tok-comment">// Ask Rebel AI anything in the panel →</span>\n\n<span class="tok-kw">const</span> <span class="tok-var">express</span> = <span class="tok-fn">require</span>(<span class="tok-str">'express'</span>);\n<span class="tok-kw">const</span> <span class="tok-var">app</span> = <span class="tok-fn">express</span>();\n\n<span class="tok-var">app</span>.<span class="tok-fn">get</span>(<span class="tok-str">'/'</span>, (<span class="tok-var">req</span>, <span class="tok-var">res</span>) =&gt; {\n  <span class="tok-var">res</span>.<span class="tok-fn">send</span>(<span class="tok-str">'&lt;h1&gt;Hello from Rebel Codespace!&lt;/h1&gt;'</span>);\n});\n\n<span class="tok-var">app</span>.<span class="tok-fn">listen</span>(<span class="tok-num">3000</span>, () =&gt; {\n  <span class="tok-var">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'Server running on port 3000'</span>);\n});`,
+    'index.html': `<span class="tok-comment">&lt;!-- index.html --&gt;</span>\n<span class="tok-kw">&lt;!DOCTYPE html&gt;</span>\n<span class="tok-fn">&lt;html</span> <span class="tok-var">lang</span>=<span class="tok-str">"en"</span><span class="tok-fn">&gt;</span>\n<span class="tok-fn">&lt;head&gt;</span>\n  <span class="tok-fn">&lt;title&gt;</span><span class="tok-str">Rebel App</span><span class="tok-fn">&lt;/title&gt;</span>\n<span class="tok-fn">&lt;/head&gt;</span>\n<span class="tok-fn">&lt;body&gt;</span>\n  <span class="tok-fn">&lt;h1&gt;</span><span class="tok-str">Hello World</span><span class="tok-fn">&lt;/h1&gt;</span>\n<span class="tok-fn">&lt;/body&gt;</span>\n<span class="tok-fn">&lt;/html&gt;</span>`,
+    'style.css': `<span class="tok-comment">/* style.css */</span>\n<span class="tok-var">body</span> {\n  <span class="tok-kw">font-family</span>: <span class="tok-str">'Roboto'</span>, sans-serif;\n  <span class="tok-kw">background</span>: <span class="tok-num">#121212</span>;\n  <span class="tok-kw">color</span>: <span class="tok-num">#fff</span>;\n  <span class="tok-kw">margin</span>: <span class="tok-num">0</span>;\n}\n\n<span class="tok-var">h1</span> {\n  <span class="tok-kw">color</span>: <span class="tok-num">#8a2be2</span>;\n}`,
+    'README.md': `<span class="tok-comment"># Rebel Codespace</span>\n\n<span class="tok-str">Powered by Rebel AI.</span>\n\n<span class="tok-comment">## Getting Started</span>\n\n<span class="tok-num">1.</span> <span class="tok-str">Install dependencies:</span> <span class="tok-kw">npm install</span>\n<span class="tok-num">2.</span> <span class="tok-str">Start dev server:</span>  <span class="tok-kw">npm run dev</span>\n<span class="tok-num">3.</span> <span class="tok-str">Ask Rebel AI for help →</span>`,
+  };
 
-  if (csLaunchBtn) {
-    csLaunchBtn.addEventListener('click', () => {
-      csLaunchBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> <span>Initializing…</span>';
-      csLaunchBtn.disabled = true;
-      setTimeout(() => {
-        csLaunchBtn.innerHTML = '<i class="fas fa-check-circle"></i> <span>Coming Soon!</span>';
-        setTimeout(() => {
-          csLaunchBtn.innerHTML = '<i class="fas fa-rocket"></i> <span>Launch Codespace</span>';
-          csLaunchBtn.disabled = false;
-        }, 2200);
-      }, 1600);
+  document.querySelectorAll('.ide-tab').forEach(tab => {
+    tab.addEventListener('click', function() {
+      const file = this.dataset.file;
+      document.querySelectorAll('.ide-tab').forEach(t => t.classList.remove('active'));
+      this.classList.add('active');
+      const codeEl = document.getElementById('ide-code-content');
+      if (codeEl && IDE_FILES[file]) codeEl.innerHTML = IDE_FILES[file];
+      document.querySelectorAll('.ide-tree-file').forEach(f => {
+        f.classList.toggle('active', f.dataset.file === file);
+      });
+    });
+  });
+
+  document.querySelectorAll('.ide-tree-file').forEach(f => {
+    f.addEventListener('click', function() {
+      const file = this.dataset.file;
+      document.querySelectorAll('.ide-tree-file').forEach(x => x.classList.remove('active'));
+      this.classList.add('active');
+      document.querySelectorAll('.ide-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.file === file);
+      });
+      const codeEl = document.getElementById('ide-code-content');
+      if (codeEl && IDE_FILES[file]) codeEl.innerHTML = IDE_FILES[file];
+    });
+  });
+
+  // ── IDE: Terminal input ──────────────────────────────────────
+  const ideTermInput  = document.getElementById('ide-terminal-input');
+  const ideTermOutput = document.getElementById('ide-terminal-output');
+
+  const IDE_CMD_RESPONSES = {
+    'help'       : 'Available: node, npm, git, rebel, clear',
+    'node -v'    : 'v20.11.0',
+    'npm -v'     : '10.2.4',
+    'git status' : 'On branch main\nnothing to commit, working tree clean',
+    'git log'    : 'commit a1b2c3d (HEAD -> main)\nAuthor: Rebel Bhaiya\nDate: Today\n\n  Initial commit',
+    'ls'         : 'app.js  index.html  style.css  README.md  node_modules/',
+    'pwd'        : '/home/rebel/rebel-project',
+    'whoami'     : 'rebel',
+    'date'       : new Date().toString(),
+    'rebel'      : 'Rebel CLI v1.0 — AI-powered dev tool\nCommands: init, dev, build, deploy',
+    'clear'      : '__clear__',
+  };
+
+  function ideAddTermLine(html) {
+    if (!ideTermOutput) return;
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    ideTermOutput.appendChild(div);
+    ideTermOutput.scrollTop = ideTermOutput.scrollHeight;
+  }
+
+  if (ideTermInput) {
+    ideTermInput.addEventListener('keydown', function(e) {
+      if (e.key !== 'Enter') return;
+      const cmd = this.value.trim();
+      if (!cmd) return;
+      this.value = '';
+      // Remove blinking cursor line, add command line
+      const cursorLine = ideTermOutput.querySelector('.ide-tline:last-child');
+      if (cursorLine) cursorLine.remove();
+      ideAddTermLine(`<div class="ide-tline"><span class="ide-tprompt">rebel@codespace:~$</span> <span class="ide-tcmd">${cmd}</span></div>`);
+      const resp = IDE_CMD_RESPONSES[cmd.toLowerCase()];
+      if (resp === '__clear__') {
+        ideTermOutput.innerHTML = '';
+      } else if (resp) {
+        resp.split('\n').forEach(line => {
+          ideAddTermLine(`<div class="ide-tout">${line}</div>`);
+        });
+      } else {
+        ideAddTermLine(`<div class="ide-terr">bash: ${cmd}: command not found</div>`);
+      }
+      ideAddTermLine(`<div class="ide-tline"><span class="ide-tprompt">rebel@codespace:~$</span> <span class="ide-tcursor">▌</span></div>`);
     });
   }
 
-  if (csLearnBtn) {
-    csLearnBtn.addEventListener('click', () => {
-      window.open('https://cursor.com', '_blank', 'noopener');
+  // Close terminal panel button
+  const ideTermClose = document.getElementById('ide-term-close');
+  if (ideTermClose) {
+    ideTermClose.addEventListener('click', () => {
+      const panel = document.getElementById('ide-terminal-panel');
+      if (panel) panel.style.display = panel.style.display === 'none' ? '' : 'none';
+    });
+  }
+
+  // ── Codespace AI Panel — uses same AI_CONFIG.baseURL API ────
+  const ideAiInput   = document.getElementById('ide-ai-input');
+  const ideAiSendBtn = document.getElementById('ide-ai-send-btn');
+  const ideAiMsgs    = document.getElementById('ide-ai-messages');
+
+  const IDE_AI_SYSTEM = 'You are Rebel AI, an expert AI coding assistant inside Rebel Codespace (a cloud IDE). Help the user write, debug, explain, and improve code. Be concise, technical, and direct. Format code with backticks.';
+
+  // History for codespace AI (separate from main chat)
+  let ideAiHistory = [];
+
+  function ideAddAiMsg(text, role) {
+    if (!ideAiMsgs) return;
+    const wrap = document.createElement('div');
+    wrap.className = `ide-ai-msg ${role === 'user' ? 'user' : 'bot'}`;
+    const avatar = document.createElement('div');
+    avatar.className = role === 'user' ? 'ide-ai-user-avatar' : 'ide-ai-avatar';
+    avatar.innerHTML = role === 'user' ? '<i class="fas fa-user"></i>' : '<i class="fas fa-robot"></i>';
+    const bubble = document.createElement('div');
+    bubble.className = 'ide-ai-bubble';
+    // Render inline code blocks
+    bubble.innerHTML = text
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/`([^`]+)`/g, '<code style="background:rgba(255,255,255,0.1);padding:1px 5px;border-radius:4px;font-family:monospace;font-size:0.85em;">$1</code>')
+      .replace(/\n/g, '<br>');
+    wrap.appendChild(avatar);
+    wrap.appendChild(bubble);
+    ideAiMsgs.appendChild(wrap);
+    ideAiMsgs.scrollTop = ideAiMsgs.scrollHeight;
+  }
+
+  function ideShowTyping() {
+    if (!ideAiMsgs) return null;
+    const el = document.createElement('div');
+    el.className = 'ide-ai-msg bot';
+    el.id = 'ide-ai-typing-indicator';
+    el.innerHTML = `<div class="ide-ai-avatar"><i class="fas fa-robot"></i></div><div class="ide-ai-typing"><span></span><span></span><span></span> Thinking…</div>`;
+    ideAiMsgs.appendChild(el);
+    ideAiMsgs.scrollTop = ideAiMsgs.scrollHeight;
+    return el;
+  }
+
+  async function ideAiSend() {
+    if (!ideAiInput) return;
+    const msg = ideAiInput.value.trim();
+    if (!msg) return;
+    ideAiInput.value = '';
+    ideAiInput.style.height = 'auto';
+    if (ideAiSendBtn) ideAiSendBtn.disabled = true;
+
+    ideAddAiMsg(msg, 'user');
+    ideAiHistory.push({ role: 'user', content: msg });
+
+    const typingEl = ideShowTyping();
+
+    try {
+      // Build context-aware prompt using same pattern as main chat
+      let contextPrompt = IDE_AI_SYSTEM + '\n\n';
+      if (ideAiHistory.length > 1) {
+        contextPrompt += 'CONVERSATION HISTORY:\n';
+        ideAiHistory.slice(0, -1).forEach(m => {
+          contextPrompt += `${m.role === 'user' ? 'User' : 'Rebel AI'}: ${m.content}\n`;
+        });
+        contextPrompt += '\n';
+      }
+      contextPrompt += `User: ${msg}\nRebel AI:`;
+
+      const url = `${AI_CONFIG.baseURL}?q=${encodeURIComponent(contextPrompt)}`;
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      if (!data.status || !data.results) throw new Error('Invalid response');
+      const reply = data.results;
+      ideAiHistory.push({ role: 'assistant', content: reply });
+      if (ideAiHistory.length > 30) ideAiHistory = ideAiHistory.slice(-30);
+      typingEl && typingEl.remove();
+      ideAddAiMsg(reply, 'bot');
+    } catch(err) {
+      typingEl && typingEl.remove();
+      ideAddAiMsg(`❌ ${err.message}`, 'bot');
+    } finally {
+      if (ideAiSendBtn) ideAiSendBtn.disabled = false;
+      ideAiInput.focus();
+    }
+  }
+
+  if (ideAiSendBtn) ideAiSendBtn.addEventListener('click', ideAiSend);
+
+  if (ideAiInput) {
+    // Auto-grow textarea
+    ideAiInput.addEventListener('input', function() {
+      this.style.height = 'auto';
+      this.style.height = Math.min(this.scrollHeight, 100) + 'px';
+    });
+    ideAiInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        ideAiSend();
+      }
     });
   }
 
