@@ -8,6 +8,12 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#1a1a1a">
   <meta name="format-detection" content="telephone=no">
+  <!-- Security: X-Content-Type-Options prevents MIME sniffing -->
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <!-- Security: Referrer policy — don't leak full URL to third parties -->
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <!-- Security: Permissions policy — restrict sensitive APIs -->
+  <meta http-equiv="Permissions-Policy" content="camera=(), geolocation=(), payment=()">
   <title>Rebel Ai </title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -326,8 +332,14 @@
           </div>
         </div>
         <h2 style="position:absolute;left:50%;transform:translateX(-50%);">Rebel Gpt</h2>
-        <!-- Model Selector -->
+        <!-- Header Actions -->
         <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
+          <button id="stopGenerationBtn" title="Stop generating" style="display:none;background:rgba(231,76,60,0.15);border:1px solid rgba(231,76,60,0.4);color:#e74c3c;border-radius:20px;padding:5px 12px;font-size:0.75rem;cursor:pointer;white-space:nowrap;">
+            <i class="fas fa-stop-circle"></i> Stop
+          </button>
+          <button id="newChatBtn" title="New Chat" style="background:rgba(138,43,226,0.15);border:1px solid rgba(138,43,226,0.4);color:#fff;border-radius:20px;padding:5px 12px;font-size:0.75rem;cursor:pointer;white-space:nowrap;">
+            <i class="fas fa-plus"></i> New Chat
+          </button>
           <select id="modelSelector" style="
             background: rgba(138,43,226,0.15);
             border: 1px solid rgba(138,43,226,0.4);
@@ -345,18 +357,47 @@
             padding-right: 28px;
             max-width: 180px;
           ">
-            <option value="claude-sonnet-4-20250514">Sonnet 4 (Default)</option>
-            <option value="claude-opus-4.6">Claude Opus 4.6</option>
-            <option value="claude-opus-4-6">Claude Opus 4-6</option>
-            <option value="cursorlm">CursorLM</option>
-            <option value="claude-opus-4.6-2026">Opus 4.6-2026</option>
-            <option value="claude-opus-4-7">Claude Opus 4-7</option>
+            <option value="gpt-5">GPT-5 (Default)</option>
+            <option value="gpt-4o">GPT-4o</option>
+            <option value="gemini">Gemini</option>
+            <option value="gptlogic">GPT Logic</option>
+            <option value="qwen">Qwen</option>
+            <option value="copilot">Copilot</option>
           </select>
         </div>
       </div>
       <div class="chat-container">
         <div id="chatMessages" class="chat-messages">
-          <div class="message bot-message">Welcome to Rebel Gpt</div>
+          <!-- Suggested Prompts — shown when chat is empty -->
+          <div id="suggestedPromptsContainer" class="suggested-prompts-container">
+            <div class="suggested-prompts-title"><i class="fas fa-robot"></i> How can I help you today?</div>
+            <div class="suggested-prompts-grid">
+              <button class="suggested-prompt-btn" data-prompt="Explain quantum computing in simple terms">
+                <i class="fas fa-atom"></i>
+                <span>Explain quantum computing in simple terms</span>
+              </button>
+              <button class="suggested-prompt-btn" data-prompt="Write a Python function to sort a list">
+                <i class="fas fa-code"></i>
+                <span>Write a Python function to sort a list</span>
+              </button>
+              <button class="suggested-prompt-btn" data-prompt="What are the latest trends in AI for 2026?">
+                <i class="fas fa-brain"></i>
+                <span>Latest AI trends in 2026</span>
+              </button>
+              <button class="suggested-prompt-btn" data-prompt="Help me write a professional email">
+                <i class="fas fa-envelope"></i>
+                <span>Help me write a professional email</span>
+              </button>
+              <button class="suggested-prompt-btn" data-prompt="Explain how neural networks work">
+                <i class="fas fa-network-wired"></i>
+                <span>How do neural networks work?</span>
+              </button>
+              <button class="suggested-prompt-btn" data-prompt="Give me tips for better productivity">
+                <i class="fas fa-rocket"></i>
+                <span>Tips for better productivity</span>
+              </button>
+            </div>
+          </div>
         </div>
         
         <!-- Image Preview Area -->
@@ -372,9 +413,11 @@
           <button id="uploadBtn" type="button" title="Upload Image">
             <i class="fas fa-image"></i>
           </button>
-          <input type="text" id="chatInput" placeholder="Type message or upload image...">
+          <textarea id="chatInput" placeholder="Type message or upload image... (Enter to send, Shift+Enter for new line)" rows="1"></textarea>
           <button id="sendMessageBtn"><i class="fas fa-paper-plane"></i></button>
         </div>
+        <!-- Character counter -->
+        <div id="charCounter" style="text-align:right;padding:2px 15px 4px;font-size:0.7rem;color:rgba(255,255,255,0.2);">0 / 4000</div>
       </div>
     </div>
   </div>
