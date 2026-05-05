@@ -345,78 +345,246 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   // ── Codespace Modal ────────────────────────────────────────
-  // ── Codespace IDE Modal ────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════
+  //  CODESPACE IDE — full implementation
+  // ══════════════════════════════════════════════════════════════
+
   const codespaceBtn   = document.getElementById('codespaceBtn');
   const codespaceModal = document.getElementById('codespaceModal');
 
   function openCodespaceModal() {
-    if (codespaceModal) {
-      codespaceModal.classList.add('show');
-      document.body.style.overflow = 'hidden';
-    }
+    if (codespaceModal) { codespaceModal.classList.add('show'); document.body.style.overflow = 'hidden'; }
   }
-
   function closeCodespaceModalFn() {
-    if (codespaceModal) {
-      codespaceModal.classList.remove('show');
-      document.body.style.overflow = '';
-    }
+    if (codespaceModal) { codespaceModal.classList.remove('show'); document.body.style.overflow = ''; }
   }
 
-  if (codespaceBtn) {
-    codespaceBtn.addEventListener('click', e => {
-      e.preventDefault();
-      openCodespaceModal();
-    });
-  }
+  if (codespaceBtn) codespaceBtn.addEventListener('click', e => { e.preventDefault(); openCodespaceModal(); });
 
-  // Close via green dot and ✕ button
   ['closeCodespaceModal', 'closeCodespaceModal2'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('click', closeCodespaceModalFn);
   });
 
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && codespaceModal && codespaceModal.classList.contains('show')) {
-      closeCodespaceModalFn();
-    }
+    if (e.key === 'Escape' && codespaceModal && codespaceModal.classList.contains('show')) closeCodespaceModalFn();
   });
 
-  // ── IDE: Tab switching ──────────────────────────────────────
-  const IDE_FILES = {
-    'app.js': `<span class="tok-comment">// Rebel Codespace — AI-powered editor</span>\n<span class="tok-comment">// Ask Rebel AI anything in the panel →</span>\n\n<span class="tok-kw">const</span> <span class="tok-var">express</span> = <span class="tok-fn">require</span>(<span class="tok-str">'express'</span>);\n<span class="tok-kw">const</span> <span class="tok-var">app</span> = <span class="tok-fn">express</span>();\n\n<span class="tok-var">app</span>.<span class="tok-fn">get</span>(<span class="tok-str">'/'</span>, (<span class="tok-var">req</span>, <span class="tok-var">res</span>) =&gt; {\n  <span class="tok-var">res</span>.<span class="tok-fn">send</span>(<span class="tok-str">'&lt;h1&gt;Hello from Rebel Codespace!&lt;/h1&gt;'</span>);\n});\n\n<span class="tok-var">app</span>.<span class="tok-fn">listen</span>(<span class="tok-num">3000</span>, () =&gt; {\n  <span class="tok-var">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'Server running on port 3000'</span>);\n});`,
-    'index.html': `<span class="tok-comment">&lt;!-- index.html --&gt;</span>\n<span class="tok-kw">&lt;!DOCTYPE html&gt;</span>\n<span class="tok-fn">&lt;html</span> <span class="tok-var">lang</span>=<span class="tok-str">"en"</span><span class="tok-fn">&gt;</span>\n<span class="tok-fn">&lt;head&gt;</span>\n  <span class="tok-fn">&lt;title&gt;</span><span class="tok-str">Rebel App</span><span class="tok-fn">&lt;/title&gt;</span>\n<span class="tok-fn">&lt;/head&gt;</span>\n<span class="tok-fn">&lt;body&gt;</span>\n  <span class="tok-fn">&lt;h1&gt;</span><span class="tok-str">Hello World</span><span class="tok-fn">&lt;/h1&gt;</span>\n<span class="tok-fn">&lt;/body&gt;</span>\n<span class="tok-fn">&lt;/html&gt;</span>`,
-    'style.css': `<span class="tok-comment">/* style.css */</span>\n<span class="tok-var">body</span> {\n  <span class="tok-kw">font-family</span>: <span class="tok-str">'Roboto'</span>, sans-serif;\n  <span class="tok-kw">background</span>: <span class="tok-num">#121212</span>;\n  <span class="tok-kw">color</span>: <span class="tok-num">#fff</span>;\n  <span class="tok-kw">margin</span>: <span class="tok-num">0</span>;\n}\n\n<span class="tok-var">h1</span> {\n  <span class="tok-kw">color</span>: <span class="tok-num">#8a2be2</span>;\n}`,
-    'README.md': `<span class="tok-comment"># Rebel Codespace</span>\n\n<span class="tok-str">Powered by Rebel AI.</span>\n\n<span class="tok-comment">## Getting Started</span>\n\n<span class="tok-num">1.</span> <span class="tok-str">Install dependencies:</span> <span class="tok-kw">npm install</span>\n<span class="tok-num">2.</span> <span class="tok-str">Start dev server:</span>  <span class="tok-kw">npm run dev</span>\n<span class="tok-num">3.</span> <span class="tok-str">Ask Rebel AI for help →</span>`,
+  // ── Plain-text content per file (source of truth) ─────────────
+  const IDE_RAW = {
+    'app.js':
+`// Rebel Codespace — AI-powered editor
+// Ask Rebel AI anything in the panel →
+
+const express = require('express');
+const app = express();
+
+app.get('/', (req, res) => {
+  res.send('<h1>Hello from Rebel Codespace!</h1>');
+});
+
+app.listen(3000, () => {
+  console.log('Server running on port 3000');
+});`,
+    'index.html':
+`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Rebel App</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>Hello World</h1>
+  <script src="app.js"></script>
+</body>
+</html>`,
+    'style.css':
+`/* style.css */
+body {
+  font-family: 'Roboto', sans-serif;
+  background: #121212;
+  color: #fff;
+  margin: 0;
+}
+
+h1 {
+  color: #8a2be2;
+}`,
+    'README.md':
+`# Rebel Codespace
+
+Powered by Rebel AI.
+
+## Getting Started
+
+1. Install dependencies: npm install
+2. Start dev server:  npm run dev
+3. Ask Rebel AI for help →`,
   };
 
+  // ── Simple syntax highlighter ──────────────────────────────────
+  function ideHighlight(code, filename) {
+    const ext = filename.split('.').pop();
+    const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+    if (ext === 'js' || ext === 'ts') {
+      return esc(code)
+        .replace(/(\/\/[^\n]*)/g, '<span class="tok-comment">$1</span>')
+        .replace(/\b(const|let|var|function|return|async|await|if|else|for|while|of|in|new|class|import|export|from|default|try|catch|throw)\b/g, '<span class="tok-kw">$1</span>')
+        .replace(/\b(\d+)\b/g, '<span class="tok-num">$1</span>')
+        .replace(/('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`)/g, '<span class="tok-str">$1</span>')
+        .replace(/\b([a-zA-Z_$][a-zA-Z0-9_$]*)\s*(?=\()/g, '<span class="tok-fn">$1</span>');
+    }
+    if (ext === 'html') {
+      return esc(code)
+        .replace(/(&lt;!--[\s\S]*?--&gt;)/g, '<span class="tok-comment">$1</span>')
+        .replace(/(&lt;\/?[a-zA-Z][a-zA-Z0-9]*)/g, '<span class="tok-fn">$1</span>')
+        .replace(/(\/?\s*&gt;)/g, '<span class="tok-fn">$1</span>')
+        .replace(/([a-zA-Z-]+)(\s*=\s*)/g, '<span class="tok-var">$1</span>$2')
+        .replace(/("(?:[^"]*)")/g, '<span class="tok-str">$1</span>');
+    }
+    if (ext === 'css') {
+      return esc(code)
+        .replace(/(\/\*[\s\S]*?\*\/)/g, '<span class="tok-comment">$1</span>')
+        .replace(/([.#]?[a-zA-Z][a-zA-Z0-9_-]*)\s*\{/g, '<span class="tok-var">$1</span> {')
+        .replace(/([\w-]+)\s*:/g, '<span class="tok-kw">$1</span>:')
+        .replace(/(#[0-9a-fA-F]{3,8}|\d+(?:px|em|rem|%|vh|vw|s))/g, '<span class="tok-num">$1</span>')
+        .replace(/('(?:[^']*)'|"(?:[^"]*)")/g, '<span class="tok-str">$1</span>');
+    }
+    if (ext === 'md') {
+      return esc(code)
+        .replace(/(#{1,6} .+)/g, '<span class="tok-comment">$1</span>')
+        .replace(/(`[^`]+`)/g, '<span class="tok-str">$1</span>')
+        .replace(/(\*\*[^*]+\*\*)/g, '<strong>$1</strong>');
+    }
+    return esc(code);
+  }
+
+  // ── Gutter line numbers ─────────────────────────────────────────
+  function ideUpdateGutter(lineCount) {
+    const gutter = document.querySelector('.ide-gutter');
+    if (!gutter) return;
+    gutter.innerHTML = '';
+    for (let i = 1; i <= Math.max(lineCount, 1); i++) {
+      const s = document.createElement('span');
+      s.textContent = i;
+      gutter.appendChild(s);
+    }
+  }
+
+  // ── Switch active file (tab + sidebar + editor) ────────────────
+  let ideCurrentFile = 'app.js';
+
+  function ideSetActiveFile(filename) {
+    if (!IDE_RAW[filename]) return;
+    ideCurrentFile = filename;
+
+    document.querySelectorAll('.ide-tab').forEach(t => t.classList.toggle('active', t.dataset.file === filename));
+    document.querySelectorAll('.ide-tree-file').forEach(f => f.classList.toggle('active', f.dataset.file === filename));
+
+    const codeEl = document.getElementById('ide-code-content');
+    if (codeEl) {
+      codeEl.innerHTML = ideHighlight(IDE_RAW[filename], filename);
+      ideUpdateGutter(IDE_RAW[filename].split('\n').length);
+    }
+  }
+
+  // ── Map language tag / filename hint → known filename ──────────
+  function ideGuessFile(hint) {
+    if (!hint) return null;
+    const h = hint.toLowerCase().trim();
+    if (h === 'app.js' || h === 'js' || h === 'javascript' || h === 'node' || h === 'nodejs' || h === 'typescript' || h === 'ts') return 'app.js';
+    if (h === 'index.html' || h === 'html' || h === 'htm') return 'index.html';
+    if (h === 'style.css' || h === 'css' || h === 'scss' || h === 'sass') return 'style.css';
+    if (h === 'readme.md' || h === 'md' || h === 'markdown') return 'README.md';
+    // fallback by content
+    return null;
+  }
+
+  // ── Typewriter animation into editor ──────────────────────────
+  let ideTypingActive = false;
+
+  function ideTypewriterCode(filename, code) {
+    return new Promise(resolve => {
+      ideSetActiveFile(filename);          // switch tab immediately
+      ideTypingActive = true;
+
+      const codeEl = document.getElementById('ide-code-content');
+      if (!codeEl) { resolve(); return; }
+
+      // Show "AI writing…" indicator in status bar
+      const sbAi = document.querySelector('.ide-sb-ai');
+      if (sbAi) sbAi.innerHTML = '<i class="fas fa-robot"></i> AI Writing…';
+
+      codeEl.classList.add('ide-ai-writing');
+      let typed = '';
+      let i = 0;
+      const total = code.length;
+      // Adaptive speed: aim to finish in ~2.5s, min 1 char/frame, max 8
+      const chunkSize = Math.max(1, Math.min(8, Math.ceil(total / 120)));
+
+      function tick() {
+        if (!ideTypingActive) { finish(); return; }
+        if (i >= total) { finish(); return; }
+        const chunk = code.slice(i, i + chunkSize);
+        typed += chunk;
+        i += chunk.length;
+        // Render plain text during typing for performance, highlight at end
+        codeEl.textContent = typed;
+        ideUpdateGutter(typed.split('\n').length);
+        codeEl.parentElement && (codeEl.parentElement.scrollTop = codeEl.parentElement.scrollHeight);
+        requestAnimationFrame(tick);
+      }
+
+      function finish() {
+        ideTypingActive = false;
+        IDE_RAW[filename] = code;
+        codeEl.innerHTML = ideHighlight(code, filename);
+        ideUpdateGutter(code.split('\n').length);
+        codeEl.classList.remove('ide-ai-writing');
+        if (sbAi) sbAi.innerHTML = '<i class="fas fa-robot"></i> Rebel AI Ready';
+        resolve();
+      }
+
+      tick();
+    });
+  }
+
+  // ── Extract code blocks from AI reply ─────────────────────────
+  // Looks for:  ```lang\n// FILE: filename.ext\n...code...```
+  // or simply:  ```lang\n...code...```
+  function ideExtractCodeBlocks(text) {
+    const blocks = [];
+    // Match fenced code blocks: ```lang\ncode\n```
+    const fence = /```([a-zA-Z0-9_.+-]*)\n([\s\S]*?)```/g;
+    let m;
+    while ((m = fence.exec(text)) !== null) {
+      const lang = m[1].trim();
+      let code = m[2];
+      // Check first line for FILE: hint
+      let fileHint = ideGuessFile(lang);
+      const fileComment = code.match(/^(?:\/\/|#|<!--)\s*FILE:\s*([^\s\n>]+)/);
+      if (fileComment) {
+        const hinted = ideGuessFile(fileComment[1]);
+        if (hinted) { fileHint = hinted; code = code.replace(fileComment[0], '').replace(/^\n/, ''); }
+      }
+      if (!fileHint && lang) fileHint = ideGuessFile(lang);
+      if (!fileHint) fileHint = 'app.js'; // default
+      blocks.push({ file: fileHint, code: code.trimEnd() });
+    }
+    return blocks;
+  }
+
+  // Tab and tree click handlers
   document.querySelectorAll('.ide-tab').forEach(tab => {
-    tab.addEventListener('click', function() {
-      const file = this.dataset.file;
-      document.querySelectorAll('.ide-tab').forEach(t => t.classList.remove('active'));
-      this.classList.add('active');
-      const codeEl = document.getElementById('ide-code-content');
-      if (codeEl && IDE_FILES[file]) codeEl.innerHTML = IDE_FILES[file];
-      document.querySelectorAll('.ide-tree-file').forEach(f => {
-        f.classList.toggle('active', f.dataset.file === file);
-      });
-    });
+    tab.addEventListener('click', function() { ideSetActiveFile(this.dataset.file); });
   });
-
   document.querySelectorAll('.ide-tree-file').forEach(f => {
-    f.addEventListener('click', function() {
-      const file = this.dataset.file;
-      document.querySelectorAll('.ide-tree-file').forEach(x => x.classList.remove('active'));
-      this.classList.add('active');
-      document.querySelectorAll('.ide-tab').forEach(t => {
-        t.classList.toggle('active', t.dataset.file === file);
-      });
-      const codeEl = document.getElementById('ide-code-content');
-      if (codeEl && IDE_FILES[file]) codeEl.innerHTML = IDE_FILES[file];
-    });
+    f.addEventListener('click', function() { ideSetActiveFile(this.dataset.file); });
   });
 
-  // ── IDE: Terminal input ──────────────────────────────────────
+  // ── Terminal ───────────────────────────────────────────────────
   const ideTermInput  = document.getElementById('ide-terminal-input');
   const ideTermOutput = document.getElementById('ide-terminal-output');
 
@@ -424,13 +592,19 @@ document.addEventListener('DOMContentLoaded', function () {
     'help'       : 'Available: node, npm, git, rebel, clear',
     'node -v'    : 'v20.11.0',
     'npm -v'     : '10.2.4',
+    'npm install': 'added 248 packages in 3.4s',
+    'npm run dev': `> rebel-project@1.0.0 dev\n> node app.js\n\nServer running on port 3000`,
+    'npm start'  : 'Server running on port 3000',
     'git status' : 'On branch main\nnothing to commit, working tree clean',
     'git log'    : 'commit a1b2c3d (HEAD -> main)\nAuthor: Rebel Bhaiya\nDate: Today\n\n  Initial commit',
+    'git init'   : 'Initialized empty Git repository in /home/rebel/rebel-project/.git/',
+    'git add .'  : '',
     'ls'         : 'app.js  index.html  style.css  README.md  node_modules/',
+    'ls -la'     : 'drwxr-xr-x app.js\ndrwxr-xr-x index.html\ndrwxr-xr-x style.css\ndrwxr-xr-x README.md',
     'pwd'        : '/home/rebel/rebel-project',
     'whoami'     : 'rebel',
     'date'       : new Date().toString(),
-    'rebel'      : 'Rebel CLI v1.0 — AI-powered dev tool\nCommands: init, dev, build, deploy',
+    'rebel'      : 'Rebel CLI v1.0 — AI-powered dev tool\nCommands: init, dev, build, deploy, ai',
     'clear'      : '__clear__',
   };
 
@@ -448,17 +622,14 @@ document.addEventListener('DOMContentLoaded', function () {
       const cmd = this.value.trim();
       if (!cmd) return;
       this.value = '';
-      // Remove blinking cursor line, add command line
-      const cursorLine = ideTermOutput.querySelector('.ide-tline:last-child');
+      const cursorLine = ideTermOutput && ideTermOutput.querySelector('.ide-tline:last-child');
       if (cursorLine) cursorLine.remove();
       ideAddTermLine(`<div class="ide-tline"><span class="ide-tprompt">rebel@codespace:~$</span> <span class="ide-tcmd">${cmd}</span></div>`);
       const resp = IDE_CMD_RESPONSES[cmd.toLowerCase()];
       if (resp === '__clear__') {
         ideTermOutput.innerHTML = '';
-      } else if (resp) {
-        resp.split('\n').forEach(line => {
-          ideAddTermLine(`<div class="ide-tout">${line}</div>`);
-        });
+      } else if (resp !== undefined) {
+        if (resp) resp.split('\n').forEach(line => ideAddTermLine(`<div class="ide-tout">${line}</div>`));
       } else {
         ideAddTermLine(`<div class="ide-terr">bash: ${cmd}: command not found</div>`);
       }
@@ -466,7 +637,6 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // Close terminal panel button
   const ideTermClose = document.getElementById('ide-term-close');
   if (ideTermClose) {
     ideTermClose.addEventListener('click', () => {
@@ -475,14 +645,34 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // ── Codespace AI Panel — uses same AI_CONFIG.baseURL API ────
+  // ── AI Panel ────────────────────────────────────────────────────
   const ideAiInput   = document.getElementById('ide-ai-input');
   const ideAiSendBtn = document.getElementById('ide-ai-send-btn');
   const ideAiMsgs    = document.getElementById('ide-ai-messages');
 
-  const IDE_AI_SYSTEM = 'You are Rebel AI, an expert AI coding assistant inside Rebel Codespace (a cloud IDE). Help the user write, debug, explain, and improve code. Be concise, technical, and direct. Format code with backticks.';
+  // System prompt tells AI to always use fenced code blocks with FILE hints
+  const IDE_AI_SYSTEM =
+`You are Rebel AI, an expert coding assistant inside Rebel Codespace (a cloud IDE similar to Cursor).
+Rules you MUST follow:
+1. When you write code, ALWAYS wrap it in a fenced code block with the language tag.
+2. On the FIRST line inside every code block, add a comment: // FILE: filename.ext
+   Use the correct filename: app.js (JavaScript/Node), index.html (HTML), style.css (CSS), README.md (Markdown).
+3. If multiple files need changes, use SEPARATE fenced code blocks each with their own FILE comment.
+4. Be concise and technical. Explain briefly before the code block.
+Example output:
+Here is the updated server:
+\`\`\`js
+// FILE: app.js
+const express = require('express');
+...
+\`\`\`
+And the HTML:
+\`\`\`html
+// FILE: index.html
+<!DOCTYPE html>
+...
+\`\`\``;
 
-  // History for codespace AI (separate from main chat)
   let ideAiHistory = [];
 
   function ideAddAiMsg(text, role) {
@@ -494,11 +684,40 @@ document.addEventListener('DOMContentLoaded', function () {
     avatar.innerHTML = role === 'user' ? '<i class="fas fa-user"></i>' : '<i class="fas fa-robot"></i>';
     const bubble = document.createElement('div');
     bubble.className = 'ide-ai-bubble';
-    // Render inline code blocks
-    bubble.innerHTML = text
-      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+
+    // Render message: strip fenced blocks from chat bubble (they go to editor), show rest
+    const textForBubble = text
+      .replace(/```[\s\S]*?```/g, match => {
+        // Show a pill instead of raw code in the chat
+        const langLine = match.match(/```([a-zA-Z0-9_.+-]*)/);
+        const lang = langLine ? langLine[1] : 'code';
+        const fileMatch = match.match(/FILE:\s*([^\s\n>]+)/);
+        const label = fileMatch ? fileMatch[1] : (lang || 'code');
+        return `<span class="ide-code-pill"><i class="fas fa-file-code"></i> ${label} → written to editor</span>`;
+      });
+
+    bubble.innerHTML = textForBubble
+      .replace(/&/g,'&amp;').replace(/</g,'<').replace(/>/g,'>')   // already safe after above
       .replace(/`([^`]+)`/g, '<code style="background:rgba(255,255,255,0.1);padding:1px 5px;border-radius:4px;font-family:monospace;font-size:0.85em;">$1</code>')
       .replace(/\n/g, '<br>');
+
+    // Fix: bubble innerHTML was already set, reset properly
+    const safeText = text
+      .replace(/```[\s\S]*?```/g, match => {
+        const fileMatch = match.match(/FILE:\s*([^\s\n>]+)/);
+        const langLine  = match.match(/```([a-zA-Z0-9_.+-]*)/);
+        const label = fileMatch ? fileMatch[1] : (langLine ? langLine[1] : 'code');
+        return `<span class="ide-code-pill"><i class="fas fa-file-code"></i> ${label} → editor</span>`;
+      });
+    bubble.innerHTML = safeText
+      .replace(/&(?!amp;|lt;|gt;|quot;)/g,'&amp;')
+      .replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/ide-code-pill&gt;/g,'ide-code-pill>')   // un-escape spans we injected
+      .replace(/&lt;span class="ide-code-pill"&gt;(.*?)&lt;\/span&gt;/g,
+               '<span class="ide-code-pill">$1</span>')
+      .replace(/`([^`]+)`/g,'<code style="background:rgba(255,255,255,0.1);padding:1px 5px;border-radius:4px;font-family:monospace;font-size:0.85em;">$1</code>')
+      .replace(/\n/g,'<br>');
+
     wrap.appendChild(avatar);
     wrap.appendChild(bubble);
     ideAiMsgs.appendChild(wrap);
@@ -526,16 +745,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
     ideAddAiMsg(msg, 'user');
     ideAiHistory.push({ role: 'user', content: msg });
-
     const typingEl = ideShowTyping();
 
     try {
-      // Build context-aware prompt using same pattern as main chat
+      // Include current file context in prompt
+      const currentCode = IDE_RAW[ideCurrentFile] || '';
       let contextPrompt = IDE_AI_SYSTEM + '\n\n';
+      contextPrompt += `CURRENTLY OPEN FILE: ${ideCurrentFile}\n\`\`\`\n${currentCode.slice(0,800)}\n\`\`\`\n\n`;
       if (ideAiHistory.length > 1) {
         contextPrompt += 'CONVERSATION HISTORY:\n';
-        ideAiHistory.slice(0, -1).forEach(m => {
-          contextPrompt += `${m.role === 'user' ? 'User' : 'Rebel AI'}: ${m.content}\n`;
+        ideAiHistory.slice(0, -1).slice(-8).forEach(m => {
+          contextPrompt += `${m.role === 'user' ? 'User' : 'Rebel AI'}: ${m.content.slice(0, 300)}\n`;
         });
         contextPrompt += '\n';
       }
@@ -547,34 +767,43 @@ document.addEventListener('DOMContentLoaded', function () {
       const data = await resp.json();
       if (!data.status || !data.results) throw new Error('Invalid response');
       const reply = data.results;
+
       ideAiHistory.push({ role: 'assistant', content: reply });
       if (ideAiHistory.length > 30) ideAiHistory = ideAiHistory.slice(-30);
+
       typingEl && typingEl.remove();
       ideAddAiMsg(reply, 'bot');
+
+      // ── Auto-write code blocks to editor ──────────────────────
+      const blocks = ideExtractCodeBlocks(reply);
+      for (const block of blocks) {
+        // Add a small delay between multiple blocks
+        await ideTypewriterCode(block.file, block.code);
+        if (blocks.length > 1) await new Promise(r => setTimeout(r, 400));
+      }
+
     } catch(err) {
       typingEl && typingEl.remove();
       ideAddAiMsg(`❌ ${err.message}`, 'bot');
     } finally {
       if (ideAiSendBtn) ideAiSendBtn.disabled = false;
-      ideAiInput.focus();
+      if (ideAiInput) ideAiInput.focus();
     }
   }
 
   if (ideAiSendBtn) ideAiSendBtn.addEventListener('click', ideAiSend);
-
   if (ideAiInput) {
-    // Auto-grow textarea
     ideAiInput.addEventListener('input', function() {
       this.style.height = 'auto';
       this.style.height = Math.min(this.scrollHeight, 100) + 'px';
     });
     ideAiInput.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        ideAiSend();
-      }
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ideAiSend(); }
     });
   }
+
+  // Init gutter on load
+  ideUpdateGutter(IDE_RAW['app.js'].split('\n').length);
 
   // ── Access Rebel Ai Modal ──────────────────────────────────
   const accessRebelBtn   = document.getElementById('accessRebelBtn');
