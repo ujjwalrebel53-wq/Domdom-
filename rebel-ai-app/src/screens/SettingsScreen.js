@@ -4,6 +4,7 @@ import {
   ScrollView, Alert, StatusBar, Linking,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
 import { Colors, Fonts, Radius } from '../theme';
 import { getCurrentUser, getSettings, saveSettings, logoutUser } from '../utils/storage';
@@ -23,6 +24,7 @@ function MiniBar({ value, max, color }) {
 }
 
 export default function SettingsScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const [user, setUser] = useState(null);
   const [settings, setSettings] = useState({ haptics: true, sound: true });
   const [stats, setStats] = useState(null);
@@ -79,7 +81,7 @@ export default function SettingsScreen({ navigation }) {
     <View style={styles.root}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.bg} />
 
-      <View style={styles.headerWrap}>
+      <View style={[styles.headerWrap, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           <Text style={styles.title}>Settings</Text>
         </View>

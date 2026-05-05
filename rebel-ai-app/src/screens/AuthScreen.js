@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, Animated, ActivityIndicator,
@@ -11,6 +12,7 @@ import { registerOrLogin } from '../utils/storage';
 const { width } = Dimensions.get('window');
 
 export default function AuthScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
@@ -67,7 +69,7 @@ export default function AuthScreen({ navigation }) {
         style={{ flex: 1, width: '100%' }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20 }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {/* Logo */}
           <View style={styles.logoRow}>
             <LinearGradient colors={['#8a2be2', '#00ced1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.logoCircle}>
@@ -167,7 +169,7 @@ const styles = StyleSheet.create({
     position: 'absolute', width: 250, height: 250, borderRadius: 125,
     backgroundColor: 'rgba(0,206,209,0.06)', bottom: 100, right: -60,
   },
-  scroll: { flexGrow: 1, justifyContent: 'center', padding: 24, paddingTop: 60 },
+  scroll: { flexGrow: 1, justifyContent: 'center', padding: 24, paddingTop: 20 },
   logoRow: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 36 },
   logoCircle: {
     width: 58, height: 58, borderRadius: 29,

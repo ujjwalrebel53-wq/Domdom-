@@ -2,7 +2,8 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
 
 import SplashScreen from '../screens/SplashScreen';
@@ -16,28 +17,30 @@ import { Colors, Fonts } from '../theme';
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
-// Custom tab bar — matches website's design language
 function CustomTabBar({ state, descriptors, navigation }) {
+  // useSafeAreaInsets — respects bottom nav bar on all Android devices
+  const insets = useSafeAreaInsets();
+
+  const icons  = { Chat: '💬', Voice: '🎙', History: '📜', Settings: '⚙️' };
+  const labels = { Chat: 'Chat', Voice: 'Voice', History: 'History', Settings: 'Settings' };
+
   return (
-    <View style={tabStyles.container}>
+    <View style={[tabStyles.container, { paddingBottom: insets.bottom }]}>
+      {/* Purple→Teal top border */}
       <LinearGradient
-        colors={['rgba(18,18,18,0.98)', 'rgba(18,18,18,1)']}
-        style={tabStyles.bar}
-      >
+        colors={['#8a2be2', '#00ced1']}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+        style={tabStyles.topBorder}
+        pointerEvents="none"
+      />
+      <View style={tabStyles.bar}>
         {state.routes.map((route, index) => {
-          const { options } = descriptors[route.key];
           const isFocused = state.index === index;
-
-          const icons = { Chat: '💬', Voice: '🎙', History: '📜', Settings: '⚙️' };
-          const labels = { Chat: 'Chat', Voice: 'Voice', History: 'History', Settings: 'Settings' };
-
           return (
             <TouchableOpacity
               key={route.key}
               style={tabStyles.tab}
-              onPress={() => {
-                if (!isFocused) navigation.navigate(route.name);
-              }}
+              onPress={() => { if (!isFocused) navigation.navigate(route.name); }}
               activeOpacity={0.8}
             >
               {isFocused ? (
@@ -58,14 +61,7 @@ function CustomTabBar({ state, descriptors, navigation }) {
             </TouchableOpacity>
           );
         })}
-      </LinearGradient>
-      {/* Gradient top border matching website's purple→teal */}
-      <LinearGradient
-        colors={['#8a2be2', '#00ced1']}
-        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-        style={tabStyles.topBorder}
-        pointerEvents="none"
-      />
+      </View>
     </View>
   );
 }
@@ -90,41 +86,45 @@ export default function AppNavigation() {
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
-          cardStyleInterpolator: ({ current, layouts }) => ({
-            cardStyle: {
-              opacity: current.progress,
-            },
+          cardStyleInterpolator: ({ current }) => ({
+            cardStyle: { opacity: current.progress },
           }),
           transitionSpec: {
-            open: { animation: 'timing', config: { duration: 280 } },
+            open:  { animation: 'timing', config: { duration: 280 } },
             close: { animation: 'timing', config: { duration: 220 } },
           },
         }}
       >
         <Stack.Screen name="Splash" component={SplashScreen} />
-        <Stack.Screen name="Auth" component={AuthScreen} />
-        <Stack.Screen name="Main" component={MainTabs} />
+        <Stack.Screen name="Auth"   component={AuthScreen} />
+        <Stack.Screen name="Main"   component={MainTabs} />
       </Stack.Navigator>
     </NavigationContainer>
   );
 }
 
 const tabStyles = StyleSheet.create({
-  container: { position: 'relative' },
+  container: {
+    backgroundColor: '#121212',
+    borderTopWidth: 0,
+  },
+  topBorder: { height: 1.5 },
   bar: {
     flexDirection: 'row',
-    paddingBottom: 12, paddingTop: 6,
+    paddingTop: 6,
+    paddingBottom: 10,
     paddingHorizontal: 8,
   },
-  topBorder: { position: 'absolute', top: 0, left: 0, right: 0, height: 1.5 },
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   activeWrap: {
     alignItems: 'center', paddingVertical: 7, paddingHorizontal: 12,
     borderRadius: 14, gap: 3,
   },
-  inactiveWrap: { alignItems: 'center', paddingVertical: 7, paddingHorizontal: 12, gap: 3 },
+  inactiveWrap: {
+    alignItems: 'center', paddingVertical: 7, paddingHorizontal: 12, gap: 3,
+  },
   icon: { fontSize: 20 },
-  iconInactive: { opacity: 0.65 },
+  iconInactive: { opacity: 0.6 },
   label: { fontSize: Fonts.size.xs, color: Colors.textMuted, fontWeight: '500' },
   labelActive: { color: Colors.teal, fontWeight: '700' },
 });

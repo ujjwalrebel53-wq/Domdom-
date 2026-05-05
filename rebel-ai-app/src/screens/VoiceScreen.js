@@ -3,6 +3,7 @@ import {
   View, Text, TouchableOpacity, StyleSheet, Animated,
   ScrollView, Alert, Platform, TextInput, Keyboard, StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Speech from 'expo-speech';
 import * as Haptics from 'expo-haptics';
 import LinearGradient from 'react-native-linear-gradient';
@@ -13,6 +14,7 @@ import { sendVoiceMessage, extractMemory, cleanForSpeech } from '../utils/api';
 const STATES = { idle: 'idle', listening: 'listening', thinking: 'thinking', speaking: 'speaking' };
 
 export default function VoiceScreen() {
+  const insets = useSafeAreaInsets();
   const [state, setState] = useState(STATES.idle);
   const [transcript, setTranscript] = useState('');
   const [reply, setReply] = useState('');
@@ -208,7 +210,7 @@ export default function VoiceScreen() {
       <StatusBar barStyle="light-content" backgroundColor={Colors.bg} />
 
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Text style={styles.headerTitle}>REBEL <Text style={{ color: Colors.teal }}>AI</Text></Text>
         <Text style={styles.headerSub}>NEURAL INTERFACE</Text>
       </View>

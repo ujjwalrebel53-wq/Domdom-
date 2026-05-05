@@ -5,6 +5,7 @@ import {
   Alert, Keyboard, InteractionManager, StatusBar,
   Share, Clipboard, ScrollView, Dimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import LinearGradient from 'react-native-linear-gradient';
@@ -322,6 +323,7 @@ function SuggestionChips({ aiReply, onSelect }) {
 
 // ── Main screen ──────────────────────────────────────────
 export default function ChatScreen() {
+  const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -494,7 +496,7 @@ export default function ChatScreen() {
       <StatusBar barStyle="light-content" backgroundColor={Colors.bg} />
 
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <View style={styles.headerLeft}>
           <LinearGradient colors={['#8a2be2', '#00ced1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.headerAvatar}>
             <Text style={styles.headerAvatarText}>R</Text>
@@ -565,7 +567,7 @@ export default function ChatScreen() {
         )}
 
         {/* Input bar */}
-        <View style={styles.inputBar}>
+        <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom || 0, Platform.OS === 'ios' ? 10 : 10) }]}>
           <TouchableOpacity onPress={showImagePicker} style={styles.attachBtn} activeOpacity={0.7}>
             <Text style={styles.attachIcon}>{image ? '🖼️' : '📎'}</Text>
           </TouchableOpacity>
@@ -620,7 +622,7 @@ const styles = StyleSheet.create({
 
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingTop: Platform.OS === 'android' ? 14 : 10, paddingBottom: 12,
+    paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12,
     borderBottomWidth: 1, borderColor: 'rgba(138,43,226,0.2)', backgroundColor: Colors.bgCard,
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -683,7 +685,7 @@ const styles = StyleSheet.create({
   inputBar: {
     flexDirection: 'row', alignItems: 'flex-end',
     paddingHorizontal: 12, paddingVertical: 10,
-    paddingBottom: Platform.OS === 'ios' ? 28 : 12,
+    paddingBottom: 10,
     borderTopWidth: 1, borderColor: 'rgba(138,43,226,0.2)',
     backgroundColor: Colors.bgCard, gap: 10,
   },

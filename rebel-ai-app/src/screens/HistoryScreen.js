@@ -4,11 +4,13 @@ import {
   Alert, StatusBar, TextInput, Share, Clipboard,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
 import { Colors, Fonts, Radius } from '../theme';
 import { getChatHistory, clearChatHistory, getCurrentUser } from '../utils/storage';
 
 export default function HistoryScreen() {
+  const insets = useSafeAreaInsets();
   const [history, setHistory] = useState([]);
   const [filtered, setFiltered] = useState([]);
   const [user, setUser] = useState(null);
@@ -82,7 +84,7 @@ export default function HistoryScreen() {
       <StatusBar barStyle="light-content" backgroundColor={Colors.bg} />
 
       {/* Header */}
-      <View style={styles.headerWrap}>
+      <View style={[styles.headerWrap, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           <View>
             <Text style={styles.title}>Chat <Text style={{ color: Colors.teal }}>History</Text></Text>
