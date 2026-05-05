@@ -52,6 +52,11 @@
               <i class="fas fa-unlock-alt"></i>
               <span>Access Rebel Ai</span>
             </a>
+            <a href="#" id="codespaceBtn" class="btn btn-codespace">
+              <span class="codespace-btn-shimmer"></span>
+              <i class="fas fa-code"></i>
+              <span>Codespace</span>
+            </a>
           </div>
           <div class="guarantee">
             <i class="fas fa-shield-alt"></i>
@@ -376,6 +381,211 @@
           <button id="sendMessageBtn"><i class="fas fa-paper-plane"></i></button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       CODESPACE MODAL
+  ════════════════════════════════════════════ -->
+  <!-- ═══════════════════════════════════════════════════════
+       CODESPACE — CURSOR-STYLE IDE INTERFACE
+  ════════════════════════════════════════════════════════ -->
+  <div id="codespaceModal" class="modal full-screen-modal">
+    <div class="modal-content ide-shell full-screen-content">
+
+      <!-- ── Title Bar (like Cursor/VS Code) ── -->
+      <div class="ide-titlebar">
+        <div class="ide-titlebar-left">
+          <span class="ide-dot red"></span>
+          <span class="ide-dot yellow"></span>
+          <span class="ide-dot green" id="closeCodespaceModal"></span>
+        </div>
+        <div class="ide-titlebar-center">
+          <span class="ide-title-icon"><i class="fas fa-code"></i></span>
+          <span class="ide-title-text">Rebel Codespace</span>
+          <span class="ide-title-badge">AI</span>
+        </div>
+        <div class="ide-titlebar-right">
+          <button class="ide-topbtn" id="ide-run-btn" title="Run"><i class="fas fa-play"></i></button>
+          <button class="ide-topbtn" title="Git"><i class="fas fa-code-branch"></i></button>
+          <button class="ide-close-btn" id="closeCodespaceModal2">✕</button>
+        </div>
+      </div>
+
+      <!-- ── Menu Bar ── -->
+      <div class="ide-menubar">
+        <span class="ide-menu-item">File</span>
+        <span class="ide-menu-item">Edit</span>
+        <span class="ide-menu-item">View</span>
+        <span class="ide-menu-item">Terminal</span>
+        <span class="ide-menu-item">Help</span>
+        <div class="ide-menu-spacer"></div>
+        <span class="ide-menu-status"><span class="ide-status-dot-green"></span> Rebel AI Connected</span>
+      </div>
+
+      <!-- ── Main IDE Body ── -->
+      <div class="ide-body">
+
+        <!-- Activity Bar (far left icons, like VS Code) -->
+        <div class="ide-activitybar">
+          <button class="ide-act-btn active" title="Explorer"><i class="fas fa-copy"></i></button>
+          <button class="ide-act-btn" title="Search"><i class="fas fa-search"></i></button>
+          <button class="ide-act-btn" title="Git"><i class="fas fa-code-branch"></i></button>
+          <button class="ide-act-btn" title="Extensions"><i class="fas fa-puzzle-piece"></i></button>
+          <div class="ide-act-spacer"></div>
+          <button class="ide-act-btn" title="Settings"><i class="fas fa-cog"></i></button>
+        </div>
+
+        <!-- Sidebar — File Explorer -->
+        <div class="ide-sidebar">
+          <div class="ide-sidebar-title">EXPLORER</div>
+          <div class="ide-tree">
+            <div class="ide-tree-folder open">
+              <i class="fas fa-chevron-down ide-chevron"></i>
+              <i class="fas fa-folder-open ide-folder-icon"></i>
+              <span>rebel-project</span>
+            </div>
+            <div class="ide-tree-file active" data-file="app.js">
+              <i class="fas fa-file-code ide-file-icon js"></i>
+              <span>app.js</span>
+            </div>
+            <div class="ide-tree-file" data-file="index.html">
+              <i class="fas fa-file-code ide-file-icon html"></i>
+              <span>index.html</span>
+            </div>
+            <div class="ide-tree-file" data-file="style.css">
+              <i class="fas fa-file-code ide-file-icon css"></i>
+              <span>style.css</span>
+            </div>
+            <div class="ide-tree-file" data-file="README.md">
+              <i class="fas fa-file-alt ide-file-icon md"></i>
+              <span>README.md</span>
+            </div>
+            <div class="ide-tree-folder">
+              <i class="fas fa-chevron-right ide-chevron"></i>
+              <i class="fas fa-folder ide-folder-icon"></i>
+              <span>node_modules</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Editor + Terminal split -->
+        <div class="ide-editor-area">
+
+          <!-- Tab Bar -->
+          <div class="ide-tabbar">
+            <div class="ide-tab active" data-file="app.js">
+              <i class="fas fa-file-code" style="color:#f0db4f;font-size:0.65rem;"></i>
+              <span>app.js</span>
+              <span class="ide-tab-close">×</span>
+            </div>
+            <div class="ide-tab" data-file="index.html">
+              <i class="fas fa-file-code" style="color:#e44d26;font-size:0.65rem;"></i>
+              <span>index.html</span>
+              <span class="ide-tab-close">×</span>
+            </div>
+            <div class="ide-tab" data-file="style.css">
+              <i class="fas fa-file-code" style="color:#264de4;font-size:0.65rem;"></i>
+              <span>style.css</span>
+              <span class="ide-tab-close">×</span>
+            </div>
+          </div>
+
+          <!-- Code Editor -->
+          <div class="ide-editor" id="ide-editor">
+            <div class="ide-gutter">
+              <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
+              <span>6</span><span>7</span><span>8</span><span>9</span><span>10</span>
+              <span>11</span><span>12</span><span>13</span><span>14</span><span>15</span>
+              <span>16</span><span>17</span><span>18</span><span>19</span><span>20</span>
+              <span>21</span><span>22</span><span>23</span><span>24</span><span>25</span>
+            </div>
+            <div class="ide-code" id="ide-code-content" contenteditable="true" spellcheck="false">
+<span class="tok-comment">// Rebel Codespace — AI-powered editor</span>
+<span class="tok-comment">// Ask Rebel AI anything in the panel →</span>
+
+<span class="tok-kw">const</span> <span class="tok-var">express</span> = <span class="tok-fn">require</span>(<span class="tok-str">'express'</span>);
+<span class="tok-kw">const</span> <span class="tok-var">app</span> = <span class="tok-fn">express</span>();
+
+<span class="tok-var">app</span>.<span class="tok-fn">get</span>(<span class="tok-str">'/'</span>, (<span class="tok-var">req</span>, <span class="tok-var">res</span>) =&gt; {
+  <span class="tok-var">res</span>.<span class="tok-fn">send</span>(<span class="tok-str">'&lt;h1&gt;Hello from Rebel Codespace!&lt;/h1&gt;'</span>);
+});
+
+<span class="tok-var">app</span>.<span class="tok-fn">listen</span>(<span class="tok-num">3000</span>, () =&gt; {
+  <span class="tok-var">console</span>.<span class="tok-fn">log</span>(<span class="tok-str">'Server running on port 3000'</span>);
+});
+            </div>
+          </div>
+
+          <!-- Terminal panel (bottom split) -->
+          <div class="ide-terminal-panel" id="ide-terminal-panel">
+            <div class="ide-terminal-tabs">
+              <span class="ide-term-tab active"><i class="fas fa-terminal"></i> Terminal</span>
+              <span class="ide-term-tab"><i class="fas fa-exclamation-triangle"></i> Problems</span>
+              <span class="ide-term-tab"><i class="fas fa-list"></i> Output</span>
+              <button class="ide-term-close-btn" id="ide-term-close"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="ide-terminal-body" id="ide-terminal-output">
+              <div class="ide-tline"><span class="ide-tprompt">rebel@codespace:~$</span> <span class="ide-tcmd">node app.js</span></div>
+              <div class="ide-tout">Server running on port 3000</div>
+              <div class="ide-tline"><span class="ide-tprompt">rebel@codespace:~$</span> <span class="ide-tcursor">▌</span></div>
+            </div>
+            <div class="ide-terminal-input-row">
+              <span class="ide-tprompt-inline">$</span>
+              <input class="ide-terminal-input" id="ide-terminal-input" placeholder="Enter command..." autocomplete="off" spellcheck="false">
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ── AI Chat Panel (right side — like Cursor's AI panel) ── -->
+        <div class="ide-ai-panel">
+          <div class="ide-ai-header">
+            <div class="ide-ai-title">
+              <span class="ide-ai-dot"></span>
+              <span>Rebel AI</span>
+            </div>
+            <div class="ide-ai-model-badge">GPT-5</div>
+          </div>
+
+          <div class="ide-ai-messages" id="ide-ai-messages">
+            <div class="ide-ai-msg bot">
+              <div class="ide-ai-avatar"><i class="fas fa-robot"></i></div>
+              <div class="ide-ai-bubble">
+                Hey! I'm Rebel AI, your coding assistant. Ask me anything — explain code, fix bugs, generate functions, or review your work.
+              </div>
+            </div>
+          </div>
+
+          <div class="ide-ai-input-area">
+            <div class="ide-ai-input-wrap">
+              <textarea
+                id="ide-ai-input"
+                class="ide-ai-textarea"
+                placeholder="Ask Rebel AI… (Enter to send)"
+                rows="1"
+              ></textarea>
+              <button class="ide-ai-send-btn" id="ide-ai-send-btn">
+                <i class="fas fa-paper-plane"></i>
+              </button>
+            </div>
+            <div class="ide-ai-hint">Powered by Rebel AI · same API as Rebel Gpt</div>
+          </div>
+        </div>
+
+      </div><!-- end ide-body -->
+
+      <!-- Status Bar (bottom, like VS Code) -->
+      <div class="ide-statusbar">
+        <span class="ide-sb-item"><i class="fas fa-code-branch"></i> main</span>
+        <span class="ide-sb-item"><i class="fas fa-check-circle"></i> 0 errors</span>
+        <span class="ide-sb-item"><i class="fas fa-exclamation-triangle"></i> 0 warnings</span>
+        <div class="ide-sb-spacer"></div>
+        <span class="ide-sb-item">JavaScript</span>
+        <span class="ide-sb-item">UTF-8</span>
+        <span class="ide-sb-item ide-sb-ai"><i class="fas fa-robot"></i> Rebel AI Ready</span>
+      </div>
+
     </div>
   </div>
 
