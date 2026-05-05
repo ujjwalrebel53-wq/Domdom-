@@ -3,13 +3,135 @@
 //  CONFIG
 // ============================================================
 
-// Backend API base URL — alwaysdata pe Node.js alag port pe run hota hai
-const BACKEND_URL = window.location.origin; // Same domain use karega automatically
+// Backend API base URL
+const BACKEND_URL = window.location.origin;
 
 const AI_CONFIG = {
   baseURL: 'https://api-rebix.vercel.app/api/gpt-5',
-  system_prompt: 'You are Rebel Gpt, an advanced AI assistant created by Rebel bhaiya. You are helpful, rebellious, and expert in coding.'
+  endpoints: {
+    'gpt-5'    : 'https://api-rebix.vercel.app/api/gpt-5',
+    'gpt-4o'   : 'https://api-rebix.vercel.app/api/gpt-5',
+    'gemini'   : 'https://api-rebix.vercel.app/api/gemini',
+    'gptlogic' : 'https://api-rebix.vercel.app/api/gptlogic',
+    'qwen'     : 'https://api-rebix.vercel.app/api/qwen',
+    'copilot'  : 'https://api-rebix.vercel.app/api/copilot',
+  },
+  system_prompt: 'You are Rebel Gpt, an advanced AI assistant created by Rebel bhaiya. You are helpful, rebellious, and expert in coding. Format responses in Markdown when helpful — use code blocks, bold, lists etc.'
 };
+
+// ── Rate Limiting (client-side) ──────────────────────────────
+const RateLimiter = (function() {
+  const MAX_REQUESTS  = 20;  // max messages per window
+  const WINDOW_MS     = 60 * 1000; // 1 minute window
+  const K = 'rbl_rate_window';
+
+  function check() {
+    const now = Date.now();
+    let w = null;
+    try { w = JSON.parse(localStorage.getItem(K)); } catch(e) {}
+    if (!w || now - w.start > WINDOW_MS) {
+      w = { start: now, count: 0 };
+    }
+    if (w.count >= MAX_REQUESTS) {
+      const remainMs = WINDOW_MS - (now - w.start);
+      return { allowed: false, retryAfterSec: Math.ceil(remainMs / 1000) };
+    }
+    w.count++;
+    try { localStorage.setItem(K, JSON.stringify(w)); } catch(e) {}
+    return { allowed: true };
+  }
+
+  return { check };
+})();
+
+// ── Input Sanitizer ──────────────────────────────────────────
+const Sanitizer = (function() {
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+  function stripScripts(str) {
+    // Remove potential script injection
+    return String(str)
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/javascript:/gi, '')
+      .replace(/on\w+\s*=/gi, '');
+  }
+  function sanitizeInput(str, maxLen) {
+    return escapeHtml(stripScripts(String(str || ''))).slice(0, maxLen || 4000);
+  }
+  function sanitizeUsername(str) {
+    return String(str || '').replace(/[^a-zA-Z0-9_\- ]/g, '').trim().slice(0, 30);
+  }
+  return { escapeHtml, sanitizeInput, sanitizeUsername, stripScripts };
+})();
+
+// ── Session Manager ───────────────────────────────────────────
+const SessionManager = (function() {
+  const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+  const K_ACTIVE = 'rbl_session_active_ts';
+  let _warningShown = false;
+  let _logoutTimer  = null;
+
+  function touch() {
+    try { localStorage.setItem(K_ACTIVE, Date.now()); } catch(e) {}
+    _warningShown = false;
+    resetTimer();
+  }
+
+  function resetTimer() {
+    clearTimeout(_logoutTimer);
+    _logoutTimer = setTimeout(() => {
+      const cu = Analytics.getCurrentUser();
+      if (!cu) return;
+      if (!_warningShown) {
+        _warningShown = true;
+        showSessionWarning();
+        _logoutTimer = setTimeout(() => forceLogout(), 2 * 60 * 1000);
+      }
+    }, SESSION_TIMEOUT - 2 * 60 * 1000);
+  }
+
+  function showSessionWarning() {
+    let toast = document.getElementById('sessionWarningToast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'sessionWarningToast';
+      toast.className = 'session-toast';
+      toast.innerHTML = '<i class="fas fa-clock"></i> Session expiring in 2 minutes. Click anywhere to stay logged in.';
+      document.body.appendChild(toast);
+    }
+    toast.classList.add('show');
+    document.addEventListener('click', touch, { once: true });
+    setTimeout(() => toast.classList.remove('show'), 8000);
+  }
+
+  function forceLogout() {
+    const cu = Analytics.getCurrentUser();
+    if (!cu) return;
+    try { localStorage.removeItem('rbl_current_user'); } catch(e) {}
+    Analytics.addLog('info', 'Session expired: auto-logout');
+    const chatModal = document.getElementById('chatModal');
+    if (chatModal) chatModal.classList.remove('show');
+    document.body.style.overflow = '';
+    // Show a brief message
+    const toast = document.getElementById('sessionWarningToast');
+    if (toast) { toast.innerHTML = '<i class="fas fa-sign-out-alt"></i> Session expired. Please log in again.'; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 4000); }
+  }
+
+  function isExpired() {
+    try {
+      const ts = Number(localStorage.getItem(K_ACTIVE) || 0);
+      return ts && (Date.now() - ts > SESSION_TIMEOUT);
+    } catch(e) { return false; }
+  }
+
+  return { touch, resetTimer, isExpired };
+})();
 
 // GPT-5 only — no Claude/Anthropic agents
 
@@ -264,11 +386,9 @@ const OTPEngine = (function() {
     const otp = generate();
     _email    = email;
 
-    // EmailJS configured hai ya nahi check karo
-    if (EMAILJS_CONFIG.PUBLIC_KEY === 'WJPN774FeTnl3kAcH') {
-      // Dev mode — OTP console mein dikhao aur mock success return karo
-      console.warn('⚠️  EmailJS not configured. OTP (dev mode):', otp);
-      Analytics.addLog('warn', `[DEV MODE] OTP for ${email}: ${otp} (EmailJS not configured)`);
+    // Dev mode check — never expose OTP in console in production
+    if (EMAILJS_CONFIG.PUBLIC_KEY === 'YOUR_PUBLIC_KEY') {
+      Analytics.addLog('warn', `[DEV MODE] OTP send attempted for ${email} — EmailJS not configured`);
       return { success: true, devMode: true, otp };
     }
 
@@ -306,9 +426,16 @@ document.addEventListener('DOMContentLoaded', function () {
   Analytics.initSession();
 
   // EmailJS init (agar configured hai)
-  if (EMAILJS_CONFIG.PUBLIC_KEY !== 'YOUR_PUBLIC_KEY') {
-    emailjs.init(EMAILJS_CONFIG.PUBLIC_KEY);
+  if (EMAILJS_CONFIG.PUBLIC_KEY !== 'YOUR_PUBLIC_KEY' && EMAILJS_CONFIG.PUBLIC_KEY) {
+    try { emailjs.init(EMAILJS_CONFIG.PUBLIC_KEY); } catch(e) {}
   }
+
+  // Keep session active on user interaction
+  ['click','keydown','touchstart'].forEach(evt => {
+    document.addEventListener(evt, () => {
+      if (Analytics.getCurrentUser()) SessionManager.touch();
+    }, { passive: true });
+  });
 
   // ── Scroll animations ──
   const observer = new IntersectionObserver((entries,obs) => {
@@ -454,24 +581,45 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   // ── STEP: LOGIN ────────────────────────────────────────────
+  // ── Login brute-force tracker ────────────────────────────────
+  const _loginAttempts = (function() {
+    const K_A = 'rbl_login_attempts', K_L = 'rbl_login_lockout';
+    const MAX = 5, LOCK_MS = 10 * 60 * 1000;
+    const isLocked = () => { try { return Date.now() < Number(localStorage.getItem(K_L)||0); } catch(e){ return false; } };
+    const getLockMins = () => { try { return Math.max(0,Math.ceil((Number(localStorage.getItem(K_L)||0)-Date.now())/60000)); } catch(e){ return 0; } };
+    const fail = () => { try { let a=Number(localStorage.getItem(K_A)||0)+1; localStorage.setItem(K_A,a); if(a>=MAX){localStorage.setItem(K_L,Date.now()+LOCK_MS);localStorage.setItem(K_A,0);} } catch(e){} };
+    const reset = () => { try{localStorage.removeItem(K_A);localStorage.removeItem(K_L);}catch(e){} };
+    const remaining = () => { try{return MAX-Number(localStorage.getItem(K_A)||0);}catch(e){return MAX;} };
+    return { isLocked, getLockMins, fail, reset, remaining };
+  })();
+
   function doLogin() {
-    const username = (document.getElementById('loginUsername')?.value || '').trim();
+    if (_loginAttempts.isLocked()) {
+      showErr('loginErr', `Too many attempts. Try again in ${_loginAttempts.getLockMins()} min.`);
+      return;
+    }
+
+    const username = Sanitizer.sanitizeUsername(document.getElementById('loginUsername')?.value || '');
     const password = (document.getElementById('loginPassword')?.value || '').trim();
     showErr('loginErr', '');
 
     if (!username) { showErr('loginErr', 'Please enter your username.'); return; }
     if (!password) { showErr('loginErr', 'Please enter your password.'); return; }
+    if (password.length > 128) { showErr('loginErr', 'Invalid password.'); return; }
 
     // Find user by username (case-insensitive)
     const users = Analytics.getUsers();
     const user  = users.find(u => u.name && u.name.toLowerCase() === username.toLowerCase());
 
     if (!user) {
+      _loginAttempts.fail();
       showErr('loginErr', 'Username not found. Please create an account first.');
       return;
     }
     if (!user.password || user.password !== password) {
-      showErr('loginErr', 'Wrong password. Please try again.');
+      _loginAttempts.fail();
+      const rem = _loginAttempts.remaining();
+      showErr('loginErr', rem > 0 ? `Wrong password. ${rem} attempts left.` : 'Account locked for 10 minutes.');
       const passEl = document.getElementById('loginPassword');
       if (passEl) { passEl.style.borderColor='#e74c3c'; setTimeout(()=>{ passEl.style.borderColor=''; passEl.value=''; },600); }
       Analytics.addLog('warn', `Failed login: ${username}`);
@@ -479,6 +627,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // ✅ Login success
+    _loginAttempts.reset();
     user.lastLogin  = new Date().toISOString();
     user.loginCount = (user.loginCount || 0) + 1;
     Analytics.saveUsers(users);
@@ -516,9 +665,10 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   document.getElementById('sendOtpBtn')?.addEventListener('click', async () => {
-    const email = (document.getElementById('authEmail')?.value || '').trim();
+    const email = (document.getElementById('authEmail')?.value || '').trim().toLowerCase().slice(0, 254);
     showErr('emailErr','');
     if (!isValidEmail(email)) { showErr('emailErr', 'Enter a valid email address.'); return; }
+    if (email.length > 254) { showErr('emailErr', 'Email too long.'); return; }
     setLoading('sendOtpBtn', true);
     const result = await OTPEngine.sendOTP(email);
     setLoading('sendOtpBtn', false);
@@ -607,7 +757,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // ── STEP: CREATE ACCOUNT ───────────────────────────────────
   document.getElementById('startChatBtn')?.addEventListener('click', ()=>{
-    const name = (document.getElementById('authName')?.value || '').trim();
+    const name = Sanitizer.sanitizeUsername(document.getElementById('authName')?.value || '');
     const pass = (document.getElementById('authPassword')?.value || '').trim();
     const conf = (document.getElementById('authConfirmPassword')?.value || '').trim();
     showErr('nameErr','');
@@ -615,6 +765,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!name || name.length < 2) { showErr('nameErr','Username must be at least 2 characters.'); return; }
     if (name.length > 30)          { showErr('nameErr','Username too long (max 30 chars).'); return; }
     if (!pass || pass.length < 6)  { showErr('nameErr','Password must be at least 6 characters.'); return; }
+    if (pass.length > 128)         { showErr('nameErr','Password too long.'); return; }
     if (pass !== conf)             { showErr('nameErr','Passwords do not match.'); const c=document.getElementById('authConfirmPassword'); if(c){c.value='';c.focus();} return; }
 
     // Username already taken?
@@ -648,6 +799,7 @@ document.addEventListener('DOMContentLoaded', function () {
   function openChatForUser(user) {
     document.body.style.overflow = 'hidden';
     chatModal.classList.add('show');
+    SessionManager.touch();
 
     // Update chat header
     const avatarEl = document.getElementById('chatUserAvatar');
@@ -655,18 +807,23 @@ document.addEventListener('DOMContentLoaded', function () {
     if(avatarEl) avatarEl.textContent = user.name.charAt(0).toUpperCase();
     if(nameEl)   nameEl.textContent   = user.name;
 
-    // Welcome message personalized
-    const chatMessages = document.getElementById('chatMessages');
-    if(chatMessages) {
-      chatMessages.innerHTML = '';
-      // Check karo history hai ya nahi
+    // Welcome / restore chat
+    const chatMessagesEl = document.getElementById('chatMessages');
+    if(chatMessagesEl) {
+      chatMessagesEl.innerHTML = '';
       const existingHistory = ChatHistory.get(user.email || 'guest');
       if(existingHistory.length > 0) {
-        // Previous conversation restore karo
-        addMessage(`Welcome back ${user.name}! 👋 Main aapki pichli conversation yaad rakhta hoon. Kya poochna chahte hain?`, 'bot');
-        // Last few messages show karo (optional - UI mein dikhana ho to)
+        // Restore last 10 messages from history for context
+        const toShow = existingHistory.slice(-10);
+        toShow.forEach(m => {
+          addMessage(m.content, m.role === 'user' ? 'user' : 'bot');
+        });
+        // Small welcome back strip
+        addMessage(`Welcome back, **${Sanitizer.escapeHtml(user.name)}**! Continuing where we left off.`, 'bot');
       } else {
-        addMessage(`Namaste ${user.name}! 👋 Main Rebel Gpt hoon. Aaj main aapki kya madad kar sakta hoon?`, 'bot');
+        // Show suggested prompts for new users
+        const promptsContainer = buildSuggestedPrompts();
+        chatMessagesEl.appendChild(promptsContainer);
       }
     }
 
@@ -725,9 +882,164 @@ document.addEventListener('DOMContentLoaded', function () {
   const sendBtn      = document.getElementById('sendMessageBtn');
   const chatMessages = document.getElementById('chatMessages');
 
-  // GPT-5 API — sends full conversation history as context in the prompt
-  async function callGPT5API(message, imageBase64, historyMessages, systemPrompt) {
-    // Build a context-aware prompt: system + prior turns + current user message
+  // ── Markdown renderer (lightweight, no deps) ────────────────
+  function renderMarkdown(text) {
+    // Escape raw HTML first to prevent XSS
+    let s = Sanitizer.escapeHtml(text);
+
+    // Code blocks (``` ... ```)
+    s = s.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
+      const l = lang || 'code';
+      const escaped = code.trim();
+      return `<pre><span class="code-lang-label">${Sanitizer.escapeHtml(l)}</span><button class="code-copy-btn" onclick="copyCodeBlock(this)"><i class="fas fa-copy"></i> Copy</button><code>${escaped}</code></pre>`;
+    });
+
+    // Inline code
+    s = s.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+
+    // Headers
+    s = s.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+    s = s.replace(/^## (.+)$/gm,  '<h2>$1</h2>');
+    s = s.replace(/^# (.+)$/gm,   '<h1>$1</h1>');
+
+    // Bold & italic
+    s = s.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+    s = s.replace(/\*\*(.+?)\*\*/g,     '<strong>$1</strong>');
+    s = s.replace(/\*(.+?)\*/g,         '<em>$1</em>');
+
+    // Blockquote
+    s = s.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+
+    // Unordered lists
+    s = s.replace(/^[\*\-] (.+)$/gm, '<li>$1</li>');
+    s = s.replace(/(<li>[\s\S]*?<\/li>)/g, '<ul>$1</ul>');
+
+    // Ordered lists
+    s = s.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+
+    // Horizontal rule
+    s = s.replace(/^---$/gm, '<hr style="border:none;border-top:1px solid rgba(255,255,255,0.1);margin:12px 0;">');
+
+    // Links
+    s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g,
+      (_, txt, url) => `<a href="${Sanitizer.escapeHtml(url)}" target="_blank" rel="noopener noreferrer" style="color:var(--accent-teal);">${Sanitizer.escapeHtml(txt)}</a>`);
+
+    // Newlines to <br> (but not inside block elements)
+    s = s.replace(/\n{2,}/g, '</p><p>');
+    s = s.replace(/\n/g, '<br>');
+    s = '<p>' + s + '</p>';
+
+    // Clean up empty paragraphs
+    s = s.replace(/<p>\s*<\/p>/g, '');
+    s = s.replace(/<p>(<(?:pre|ul|ol|h[123]|blockquote|hr)[^>]*>)/g, '$1');
+    s = s.replace(/(<\/(?:pre|ul|ol|h[123]|blockquote)>)<\/p>/g, '$1');
+
+    return s;
+  }
+
+  // Global helper for code block copy
+  window.copyCodeBlock = function(btn) {
+    const code = btn.parentElement.querySelector('code');
+    if (!code) return;
+    const text = code.textContent || '';
+    navigator.clipboard.writeText(text).then(() => {
+      btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+      btn.style.color = '#2ecc71';
+      setTimeout(() => { btn.innerHTML = '<i class="fas fa-copy"></i> Copy'; btn.style.color = ''; }, 2000);
+    }).catch(() => {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); } catch(e) {}
+      document.body.removeChild(ta);
+    });
+  };
+
+  // ── Stop generation controller ───────────────────────────────
+  let _abortController = null;
+  let _isGenerating = false;
+
+  const stopGenerationBtn = document.getElementById('stopGenerationBtn');
+  if (stopGenerationBtn) {
+    stopGenerationBtn.addEventListener('click', () => {
+      if (_abortController) { _abortController.abort(); }
+      _isGenerating = false;
+      stopGenerationBtn.style.display = 'none';
+    });
+  }
+
+  // ── New Chat ──────────────────────────────────────────────────
+  const newChatBtn = document.getElementById('newChatBtn');
+  if (newChatBtn) {
+    newChatBtn.addEventListener('click', () => {
+      const cu = Analytics.getCurrentUser();
+      if (!cu) return;
+      if (!confirm('Start a new conversation? Current chat will be cleared.')) return;
+      ChatHistory.clear(cu.email || 'guest');
+      const chatMessages = document.getElementById('chatMessages');
+      if (chatMessages) {
+        chatMessages.innerHTML = '';
+        const promptsContainer = buildSuggestedPrompts();
+        chatMessages.appendChild(promptsContainer);
+      }
+      Analytics.addLog('info', `${cu.name} started new chat.`);
+    });
+  }
+
+  // ── Suggested Prompts builder ─────────────────────────────────
+  function buildSuggestedPrompts() {
+    const container = document.createElement('div');
+    container.id = 'suggestedPromptsContainer';
+    container.className = 'suggested-prompts-container';
+    const prompts = [
+      { icon: 'fa-atom',         text: 'Explain quantum computing in simple terms' },
+      { icon: 'fa-code',         text: 'Write a Python function to sort a list' },
+      { icon: 'fa-brain',        text: 'What are the latest trends in AI for 2026?' },
+      { icon: 'fa-envelope',     text: 'Help me write a professional email' },
+      { icon: 'fa-network-wired',text: 'Explain how neural networks work' },
+      { icon: 'fa-rocket',       text: 'Give me tips for better productivity' },
+    ];
+    container.innerHTML = `
+      <div class="suggested-prompts-title"><i class="fas fa-robot"></i> How can I help you today?</div>
+      <div class="suggested-prompts-grid">
+        ${prompts.map(p => `<button class="suggested-prompt-btn" data-prompt="${Sanitizer.escapeHtml(p.text)}"><i class="fas ${p.icon}"></i><span>${Sanitizer.escapeHtml(p.text)}</span></button>`).join('')}
+      </div>`;
+    container.querySelectorAll('.suggested-prompt-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const prompt = btn.dataset.prompt || '';
+        if (chatInput) { chatInput.value = prompt; chatInput.focus(); }
+        container.remove();
+      });
+    });
+    return container;
+  }
+
+  // Wire up existing suggested prompts in HTML
+  document.querySelectorAll('.suggested-prompt-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const prompt = btn.dataset.prompt || '';
+      if (chatInput) { chatInput.value = prompt; chatInput.focus(); }
+      const container = document.getElementById('suggestedPromptsContainer');
+      if (container) container.remove();
+    });
+  });
+
+  // ── Textarea auto-resize & char counter ──────────────────────
+  if (chatInput) {
+    chatInput.addEventListener('input', function() {
+      this.style.height = 'auto';
+      this.style.height = Math.min(this.scrollHeight, 140) + 'px';
+      const counter = document.getElementById('charCounter');
+      const len = this.value.length;
+      if (counter) {
+        counter.textContent = `${len} / 4000`;
+        counter.style.color = len > 3500 ? '#e74c3c' : len > 3000 ? '#f1c40f' : 'rgba(255,255,255,0.2)';
+      }
+    });
+  }
+
+  // ── API call with model selection ────────────────────────────
+  async function callGPT5API(message, imageBase64, historyMessages, systemPrompt, signal) {
     const history = historyMessages || [];
     let contextPrompt = (systemPrompt || AI_CONFIG.system_prompt) + '\n\n';
     if (history.length > 0) {
@@ -738,22 +1050,70 @@ document.addEventListener('DOMContentLoaded', function () {
       contextPrompt += '\n';
     }
     contextPrompt += `User: ${message}\nRebel Gpt:`;
-    let url = `${AI_CONFIG.baseURL}?q=${encodeURIComponent(contextPrompt)}`;
-    if (imageBase64) url += `&image=${encodeURIComponent(imageBase64)}`;
-    const response = await fetch(url);
+
+    // Get selected model endpoint
+    const modelSel = document.getElementById('modelSelector');
+    const model    = modelSel ? modelSel.value : 'gpt-5';
+    const endpoint = AI_CONFIG.endpoints[model] || AI_CONFIG.baseURL;
+
+    // copilot uses different param name
+    const paramName = model === 'copilot' ? 'text' : 'q';
+    let url = `${endpoint}?${paramName}=${encodeURIComponent(contextPrompt)}`;
+    if (imageBase64 && model !== 'copilot') url += `&image=${encodeURIComponent(imageBase64)}`;
+
+    const fetchOpts = { signal };
+    const response = await fetch(url, fetchOpts);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
-    if (!data.status || !data.results) throw new Error('Invalid API response');
-    return data.results;
+
+    // Normalize various response shapes
+    const result = data.results || data.result || data.response || data.message || data.content || data.answer;
+    if (!result) throw new Error('Invalid API response');
+    return String(result);
   }
 
   async function sendMessage() {
-    const message = chatInput.value.trim();
-    if(!message && !selectedImageBase64) return;
+    const rawMessage = chatInput.value.trim();
+    if(!rawMessage && !selectedImageBase64) return;
+
+    // Rate limit check
+    const rl = RateLimiter.check();
+    if (!rl.allowed) {
+      addMessage(`⏳ Too many requests. Please wait ${rl.retryAfterSec} seconds.`, 'bot');
+      return;
+    }
+
+    // Input length guard
+    if (rawMessage.length > 4000) {
+      addMessage('❌ Message too long. Max 4000 characters.', 'bot');
+      return;
+    }
+
+    // Session expiry check
+    if (SessionManager.isExpired()) {
+      addMessage('⚠️ Your session has expired. Please log in again.', 'bot');
+      try { localStorage.removeItem('rbl_current_user'); } catch(e) {}
+      return;
+    }
+    SessionManager.touch();
+
+    // Remove suggested prompts if present
+    const promptsEl = document.getElementById('suggestedPromptsContainer');
+    if (promptsEl) promptsEl.remove();
+
+    const message = rawMessage;
     addMessage(message, 'user', false, selectedImageBase64);
     chatInput.value = '';
+    chatInput.style.height = 'auto';
+    const counter = document.getElementById('charCounter');
+    if (counter) counter.textContent = '0 / 4000';
     sendBtn.disabled = true;
-    const loadingId = addMessage('Thinking…', 'bot', true);
+
+    // Show stop button
+    if (stopGenerationBtn) stopGenerationBtn.style.display = 'flex';
+    _isGenerating = true;
+
+    const loadingId = addMessage('', 'bot', true);
     const t0 = performance.now();
 
     // Track api key usage
@@ -764,19 +1124,26 @@ document.addEventListener('DOMContentLoaded', function () {
     const userEmail = cu?.email || 'guest';
     Analytics.addLog('info', `${cu?cu.name:'User'}: "${message.slice(0,60)}${message.length>60?'…':''}"`);
 
-    // ── Conversation history me user message add karo ──
     const systemPrompt = localStorage.getItem('rbl_system_prompt') || AI_CONFIG.system_prompt;
-    const historyBeforeSend = ChatHistory.get(userEmail); // history BEFORE adding current message
+    const historyBeforeSend = ChatHistory.get(userEmail);
     ChatHistory.add(userEmail, 'user', message);
+
+    // Abort controller for stop generation
+    _abortController = new AbortController();
+    const { signal } = _abortController;
 
     try {
       let replyText = '';
-      // GPT-5 API — pass history so the model remembers the conversation
-      replyText = await callGPT5API(message, selectedImageBase64, historyBeforeSend, systemPrompt);
+      replyText = await callGPT5API(message, selectedImageBase64, historyBeforeSend, systemPrompt, signal);
+
+      if (!_isGenerating) {
+        // User pressed stop — remove loading indicator silently
+        document.getElementById(loadingId)?.remove();
+        sendBtn.disabled = false;
+        return;
+      }
 
       const ms = Math.round(performance.now()-t0);
-
-      // ── Bot reply ko history me add karo ──
       ChatHistory.add(userEmail, 'assistant', replyText);
 
       document.getElementById(loadingId)?.remove();
@@ -788,8 +1155,13 @@ document.addEventListener('DOMContentLoaded', function () {
       fetch('/api/track/message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_email:cu?.email,type:'text',response_ms:ms})}).catch(()=>{});
       fetch('/api/track/api-call',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({response_ms:ms,success:true})}).catch(()=>{});
     } catch(err) {
+      if (err.name === 'AbortError') {
+        document.getElementById(loadingId)?.remove();
+        sendBtn.disabled = false;
+        if (stopGenerationBtn) stopGenerationBtn.style.display = 'none';
+        return;
+      }
       const ms = Math.round(performance.now()-t0);
-      // Failed message history se remove karo
       const h = ChatHistory.get(userEmail);
       if(h.length && h[h.length-1].role==='user') { h.pop(); ChatHistory.save(userEmail, h); }
       document.getElementById(loadingId)?.remove();
@@ -799,15 +1171,21 @@ document.addEventListener('DOMContentLoaded', function () {
       fetch('/api/track/api-call',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({response_ms:ms,success:false})}).catch(()=>{});
     } finally {
       selectedImageBase64=null;
+      _isGenerating = false;
+      _abortController = null;
       const pc=document.getElementById('imagePreviewContainer'); if(pc) pc.style.display='none';
       if(uploadBtn){ uploadBtn.style.background=uploadBtn.style.color=uploadBtn.style.borderColor=''; }
-      imageInput.value=''; sendBtn.disabled=false; chatInput.focus();
+      imageInput.value=''; sendBtn.disabled=false;
+      if (stopGenerationBtn) stopGenerationBtn.style.display = 'none';
+      chatInput.focus();
     }
   }
 
   if(sendBtn && chatInput){
     sendBtn.addEventListener('click', sendMessage);
-    chatInput.addEventListener('keypress', e=>{ if(e.key==='Enter') sendMessage(); });
+    chatInput.addEventListener('keydown', e=>{
+      if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); }
+    });
   }
 
   // ────────────────────────────────────────────────────────
@@ -816,29 +1194,150 @@ document.addEventListener('DOMContentLoaded', function () {
   function addMessage(text, sender, isLoading=false, imageData=null) {
     const container = document.createElement('div');
     container.classList.add('message-container', `${sender}-container`);
+
     if(sender==='bot'){
       const avatar = document.createElement('img');
       avatar.src='https://public.youware.com/users-website-assets/prod/a6330b2a-2d0c-4263-9e0e-f58a67b39c2d/3bd4f7557c4e4ed0adc20480987490fa.jpg';
       avatar.alt='Rebel AI'; avatar.classList.add('message-avatar');
       container.appendChild(avatar);
     }
-    const div=document.createElement('div'); div.classList.add('message',`${sender}-message`);
+
+    const msgWrapper = document.createElement('div');
+    msgWrapper.style.cssText = 'display:flex;flex-direction:column;max-width:100%;';
+
+    const div = document.createElement('div');
+    div.classList.add('message', `${sender}-message`);
+
     if(imageData && sender==='user'){
-      const img=document.createElement('img'); img.src=imageData;
-      img.style.cssText='max-width:200px;max-height:150px;border-radius:10px;display:block;margin-bottom:8px;border:2px solid rgba(255,255,255,0.2);';
+      const img = document.createElement('img');
+      img.src = imageData;
+      img.style.cssText = 'max-width:200px;max-height:150px;border-radius:10px;display:block;margin-bottom:8px;border:2px solid rgba(255,255,255,0.2);';
       div.appendChild(img);
     }
+
     if(isLoading){
-      div.textContent=text; div.id='loading-'+Date.now();
-    } else if(sender==='bot'){
-      const span=document.createElement('span'); span.textContent=''; div.appendChild(span);
-      let i=0; (function tw(){ if(i<text.length){ span.textContent+=text.charAt(i++); chatMessages.scrollTop=chatMessages.scrollHeight; setTimeout(tw,18); }})();
+      div.id = 'loading-' + Date.now();
+      // Show animated typing dots instead of plain text
+      div.innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div>';
+    } else if(sender === 'bot'){
+      // Render markdown with typewriter
+      const contentSpan = document.createElement('span');
+      div.appendChild(contentSpan);
+
+      // Typewriter effect character by character
+      let i = 0;
+      let rawAccumulated = '';
+      const tw = () => {
+        if (!_isGenerating && i < text.length - 1) return; // stopped early
+        if(i < text.length){
+          rawAccumulated += text.charAt(i++);
+          // Re-render markdown periodically for performance
+          if(i % 8 === 0 || i === text.length) {
+            contentSpan.innerHTML = renderMarkdown(rawAccumulated);
+          }
+          chatMessages.scrollTop = chatMessages.scrollHeight;
+          setTimeout(tw, 12);
+        } else {
+          // Final render
+          contentSpan.innerHTML = renderMarkdown(text);
+          chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+      };
+      tw();
     } else {
-      if(text){ const sp=document.createElement('span'); sp.textContent=text; div.appendChild(sp); }
+      if(text){
+        const sp = document.createElement('span');
+        sp.textContent = text;
+        div.appendChild(sp);
+      }
     }
-    container.appendChild(div);
+
+    msgWrapper.appendChild(div);
+
+    // Timestamp
+    if(!isLoading) {
+      const ts = document.createElement('span');
+      ts.className = 'msg-timestamp';
+      ts.textContent = new Date().toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit', hour12:true });
+      msgWrapper.appendChild(ts);
+
+      // Action buttons (copy + regenerate for bot)
+      if(sender === 'bot' && text) {
+        const actions = document.createElement('div');
+        actions.className = 'msg-actions';
+
+        // Copy button
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'msg-action-btn';
+        copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copy';
+        copyBtn.addEventListener('click', () => {
+          navigator.clipboard.writeText(text).then(() => {
+            copyBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+            copyBtn.classList.add('copied');
+            setTimeout(() => { copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copy'; copyBtn.classList.remove('copied'); }, 2000);
+          }).catch(() => {
+            const ta = document.createElement('textarea');
+            ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
+            document.body.appendChild(ta); ta.select();
+            try { document.execCommand('copy'); } catch(e) {}
+            document.body.removeChild(ta);
+          });
+        });
+        actions.appendChild(copyBtn);
+
+        // Regenerate button (only for bot messages)
+        const regenBtn = document.createElement('button');
+        regenBtn.className = 'msg-action-btn';
+        regenBtn.innerHTML = '<i class="fas fa-redo"></i> Regenerate';
+        regenBtn.addEventListener('click', async () => {
+          // Find the last user message from history
+          const cu = Analytics.getCurrentUser();
+          const userEmail = cu?.email || 'guest';
+          const history = ChatHistory.get(userEmail);
+          // Remove last assistant message and re-send last user message
+          let lastUserMsg = '';
+          const trimmedHistory = [...history];
+          if(trimmedHistory.length && trimmedHistory[trimmedHistory.length-1].role === 'assistant') trimmedHistory.pop();
+          if(trimmedHistory.length && trimmedHistory[trimmedHistory.length-1].role === 'user') {
+            lastUserMsg = trimmedHistory[trimmedHistory.length-1].content;
+            trimmedHistory.pop();
+          }
+          if(!lastUserMsg) return;
+          ChatHistory.save(userEmail, trimmedHistory);
+          // Remove this message container from UI
+          container.remove();
+          // Re-trigger send with the user message
+          if(chatInput) { chatInput.value = lastUserMsg; }
+          sendMessage();
+        });
+        actions.appendChild(regenBtn);
+
+        msgWrapper.appendChild(actions);
+      }
+
+      // User message: copy only
+      if(sender === 'user' && text) {
+        const actions = document.createElement('div');
+        actions.className = 'msg-actions';
+        actions.style.justifyContent = 'flex-end';
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'msg-action-btn';
+        copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copy';
+        copyBtn.addEventListener('click', () => {
+          navigator.clipboard.writeText(text).then(() => {
+            copyBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+            copyBtn.classList.add('copied');
+            setTimeout(() => { copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copy'; copyBtn.classList.remove('copied'); }, 2000);
+          }).catch(() => {});
+        });
+        actions.appendChild(copyBtn);
+        msgWrapper.appendChild(actions);
+      }
+    }
+
+    container.appendChild(msgWrapper);
     chatMessages.appendChild(container);
-    chatMessages.scrollTop=chatMessages.scrollHeight;
+    chatMessages.scrollTop = chatMessages.scrollHeight;
     return isLoading ? div.id : null;
   }
 
@@ -877,11 +1376,17 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   function showDevOtpToast(otp) {
+    // In dev mode only — show OTP since EmailJS not configured
+    // In production with EmailJS configured, this function is never called
     const toast = document.createElement('div');
-    toast.innerHTML = `<i class="fas fa-info-circle"></i> <strong>Dev Mode OTP:</strong> <span style="font-size:1.3rem;letter-spacing:3px;font-weight:700;color:#00ced1;">${otp}</span>`;
+    toast.innerHTML = `<i class="fas fa-info-circle"></i> <strong>Dev Mode:</strong> Check browser console for OTP`;
     toast.style.cssText='position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:#1a1a1a;border:1px solid rgba(0,206,209,0.4);color:white;padding:14px 24px;border-radius:12px;z-index:99999;font-size:0.9rem;box-shadow:0 10px 30px rgba(0,0,0,0.5);text-align:center;min-width:280px;';
     document.body.appendChild(toast);
-    setTimeout(()=>toast.remove(), 15000);
+    // Only log to console in dev mode (not to UI)
+    if (typeof otp !== 'undefined') {
+      console.info('%c[DEV] OTP: ' + otp, 'color:#00ced1;font-size:1.2em;font-weight:bold;');
+    }
+    setTimeout(()=>toast.remove(), 8000);
   }
 });
 
@@ -1013,9 +1518,64 @@ document.addEventListener('DOMContentLoaded', function () {
       post('/api/auth/logout', {}).catch(() => {});
     });
 
+    // ── Admin Login Brute-Force Protection ──────────────────────────────────
+    const _adminAttempts = (function() {
+      const K_ATTEMPTS = 'rbl_admin_attempts';
+      const K_LOCKOUT  = 'rbl_admin_lockout';
+      const MAX_ATTEMPTS = 5;
+      const LOCKOUT_MS   = 15 * 60 * 1000; // 15 minutes
+
+      function isLocked() {
+        try {
+          const lockUntil = Number(localStorage.getItem(K_LOCKOUT) || 0);
+          return Date.now() < lockUntil;
+        } catch(e) { return false; }
+      }
+
+      function getLockRemaining() {
+        try {
+          const lockUntil = Number(localStorage.getItem(K_LOCKOUT) || 0);
+          return Math.max(0, Math.ceil((lockUntil - Date.now()) / 60000));
+        } catch(e) { return 0; }
+      }
+
+      function recordFail() {
+        try {
+          let attempts = Number(localStorage.getItem(K_ATTEMPTS) || 0) + 1;
+          localStorage.setItem(K_ATTEMPTS, attempts);
+          if (attempts >= MAX_ATTEMPTS) {
+            localStorage.setItem(K_LOCKOUT, Date.now() + LOCKOUT_MS);
+            localStorage.setItem(K_ATTEMPTS, 0);
+          }
+        } catch(e) {}
+      }
+
+      function reset() {
+        try {
+          localStorage.removeItem(K_ATTEMPTS);
+          localStorage.removeItem(K_LOCKOUT);
+        } catch(e) {}
+      }
+
+      function remaining() {
+        try { return MAX_ATTEMPTS - Number(localStorage.getItem(K_ATTEMPTS) || 0); } catch(e) { return MAX_ATTEMPTS; }
+      }
+
+      return { isLocked, getLockRemaining, recordFail, reset, remaining };
+    })();
+
     // ── Login — verify via backend with fallback ──────────────────────────────
     async function doLogin() {
-      const pass = passInput ? passInput.value : '';
+      // Brute-force lockout check
+      if (_adminAttempts.isLocked()) {
+        const mins = _adminAttempts.getLockRemaining();
+        if (loginErr) { loginErr.textContent = `Too many attempts. Locked for ${mins} min.`; }
+        Analytics.addLog('warn', 'Admin login blocked — lockout active.');
+        return;
+      }
+
+      const pass = passInput ? passInput.value.trim() : '';
+      if (!pass) { if (loginErr) loginErr.textContent = 'Enter password.'; return; }
 
       let isOk = false;
 
@@ -1026,21 +1586,24 @@ document.addEventListener('DOMContentLoaded', function () {
           isOk = true;
         }
       } catch(e) {
-        // Backend unreachable — fallback to local master password check
-        const MASTER_PASS = 'rebel@admin123';
-        const localPass = Analytics.getAdminPass() || MASTER_PASS;
-        isOk = (pass === localPass || pass === MASTER_PASS);
+        // Backend unreachable — fallback to local password check
+        const localPass = Analytics.getAdminPass();
+        isOk = !!(localPass && pass === localPass);
       }
 
       if (isOk) {
+        _adminAttempts.reset();
         adminLogin.style.display = 'none'; adminDash.style.display = 'flex';
-        localStorage.setItem('rbl_admin_session', 'active'); // legacy compat
+        localStorage.setItem('rbl_admin_session', 'active');
         try { post('/api/logs/add', { level: 'info', msg: 'Admin logged in.' }); } catch(e) {}
         initDashboard();
       } else {
-        if (loginErr) { loginErr.textContent = '✕ Wrong password!'; setTimeout(() => { if (loginErr) loginErr.textContent = ''; }, 2500); }
-        if (passInput) { passInput.style.borderColor = '#e74c3c'; setTimeout(() => { passInput.style.borderColor = ''; }, 600); }
-        try { post('/api/logs/add', { level: 'error', msg: 'Failed admin login attempt.' }); } catch(e) {}
+        _adminAttempts.recordFail();
+        const rem = _adminAttempts.remaining();
+        const msg = rem > 0 ? `✕ Wrong password! ${rem} attempts left.` : 'Account locked for 15 minutes.';
+        if (loginErr) { loginErr.textContent = msg; setTimeout(() => { if (loginErr) loginErr.textContent = ''; }, 3000); }
+        if (passInput) { passInput.style.borderColor = '#e74c3c'; setTimeout(() => { passInput.style.borderColor = ''; passInput.value = ''; }, 600); }
+        Analytics.addLog('warn', `Failed admin login attempt. Remaining: ${rem}`);
       }
     }
 
