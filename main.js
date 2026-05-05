@@ -725,27 +725,25 @@ document.addEventListener('DOMContentLoaded', function () {
   const sendBtn      = document.getElementById('sendMessageBtn');
   const chatMessages = document.getElementById('chatMessages');
 
-  // ── Anthropic API se message bhejo (conversation history ke saath) ──
-  // ── Ecomagent API se message bhejo (OpenAI-compatible, conversation history ke saath) ──
-  // GPT-5 API — single model, no Claude
-  async function callGPT5API(message, imageBase64) {
-    let url = `${AI_CONFIG.baseURL}?q=${encodeURIComponent(message)}`;
+  // GPT-5 API — sends full conversation history as context in the prompt
+  async function callGPT5API(message, imageBase64, historyMessages, systemPrompt) {
+    // Build a context-aware prompt: system + prior turns + current user message
+    const history = historyMessages || [];
+    let contextPrompt = (systemPrompt || AI_CONFIG.system_prompt) + '\n\n';
+    if (history.length > 0) {
+      contextPrompt += 'CONVERSATION HISTORY (most recent last):\n';
+      history.forEach(m => {
+        contextPrompt += `${m.role === 'user' ? 'User' : 'Rebel Gpt'}: ${m.content}\n`;
+      });
+      contextPrompt += '\n';
+    }
+    contextPrompt += `User: ${message}\nRebel Gpt:`;
+    let url = `${AI_CONFIG.baseURL}?q=${encodeURIComponent(contextPrompt)}`;
     if (imageBase64) url += `&image=${encodeURIComponent(imageBase64)}`;
     const response = await fetch(url);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
     if (!data.status || !data.results) throw new Error('Invalid API response');
-    return data.results;
-  }
-
-  // ── Free API fallback (GET request, no history) ──
-  async function callFreeAPI(message, imageBase64) {
-    let url = `${AI_CONFIG.baseURL}?q=${encodeURIComponent(message)}`;
-    if(imageBase64) url+=`&image=${encodeURIComponent(imageBase64)}`;
-    const response = await fetch(url);
-    if(!response.ok) throw new Error(`HTTP ${response.status}`);
-    const data = await response.json();
-    if(!data.status||!data.results) throw new Error('Invalid API response');
     return data.results;
   }
 
@@ -768,13 +766,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // ── Conversation history me user message add karo ──
     const systemPrompt = localStorage.getItem('rbl_system_prompt') || AI_CONFIG.system_prompt;
-    const historyBeforeSend = ChatHistory.get(userEmail); // history BEFORE adding current
+    const historyBeforeSend = ChatHistory.get(userEmail); // history BEFORE adding current message
     ChatHistory.add(userEmail, 'user', message);
 
     try {
       let replyText = '';
-      // GPT-5 API — only one agent
-      replyText = await callGPT5API(message, selectedImageBase64);
+      // GPT-5 API — pass history so the model remembers the conversation
+      replyText = await callGPT5API(message, selectedImageBase64, historyBeforeSend, systemPrompt);
 
       const ms = Math.round(performance.now()-t0);
 
@@ -3014,11 +3012,11 @@ RULES — strictly follow:
     }
 
     const apis = [
-      fetchWithTimeout(`https://api-rebix.vercel.app/api/gptlogic?q=${encoded}&prompt=${encodeURIComponent(VA_SYSTEM)}`),
+      fetchWithTimeout(`https://api-rebix.vercel.app/api/gptlogic?q=${qEncoded}&prompt=${encodeURIComponent(VA_SYSTEM + buildMemoryContext())}`),
       fetchWithTimeout(`https://api-rebix.vercel.app/api/gemini?q=${qEncoded}`),
       fetchWithTimeout(`https://api-rebix.vercel.app/api/qwen?q=${qEncoded}`),
       fetchWithTimeout(`https://api-rebix.vercel.app/api/copilot?text=${qEncoded}`),
-      fetchWithTimeout(`https://api-rebix.vercel.app/api/gpt-5?q=${encoded}`),
+      fetchWithTimeout(`https://api-rebix.vercel.app/api/gpt-5?q=${qEncoded}`),
     ];
 
     return new Promise((resolve) => {
