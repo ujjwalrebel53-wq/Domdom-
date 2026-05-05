@@ -11,27 +11,7 @@ const AI_CONFIG = {
   system_prompt: 'You are Rebel Gpt, an advanced AI assistant created by Rebel bhaiya. You are helpful, rebellious, and expert in coding.'
 };
 
-// ── Ecomagent API Config (Hardcoded) ──
-const ANTHROPIC_CONFIG = {
-  apiKey: 'sk-98432bd90bc7edc37567361ddbe2458c1c1f032946d95e0a',
-  baseURL: 'https://api.ecomagent.in/v1/chat/completions',
-  model: 'claude-sonnet-4-20250514',  // default, runtime me override hoga
-  useAnthropic: true,
-  availableModels: [
-    { id: 'claude-sonnet-4-20250514', label: 'Sonnet 4 (Default)' },
-    { id: 'claude-opus-4.6',          label: 'Claude Opus 4.6'    },
-    { id: 'claude-opus-4-6',          label: 'Claude Opus 4-6'    },
-    { id: 'cursorlm',                 label: 'CursorLM'           },
-    { id: 'claude-opus-4.6-2026',     label: 'Opus 4.6-2026'      },
-    { id: 'claude-opus-4-7',          label: 'Claude Opus 4-7'    },
-  ],
-};
-
-// Active model — selector se change hoga
-function getActiveModel() {
-  const sel = document.getElementById('modelSelector');
-  return sel ? sel.value : ANTHROPIC_CONFIG.model;
-}
+// GPT-5 only — no Claude/Anthropic agents
 
 // ── Chat Conversation History (memory fix) ──
 // Per-user conversation history store karta hai
@@ -285,7 +265,7 @@ const OTPEngine = (function() {
     _email    = email;
 
     // EmailJS configured hai ya nahi check karo
-    if (EMAILJS_CONFIG.PUBLIC_KEY === 'YOUR_PUBLIC_KEY') {
+    if (EMAILJS_CONFIG.PUBLIC_KEY === 'WJPN774FeTnl3kAcH') {
       // Dev mode — OTP console mein dikhao aur mock success return karo
       console.warn('⚠️  EmailJS not configured. OTP (dev mode):', otp);
       Analytics.addLog('warn', `[DEV MODE] OTP for ${email}: ${otp} (EmailJS not configured)`);
@@ -747,53 +727,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // ── Anthropic API se message bhejo (conversation history ke saath) ──
   // ── Ecomagent API se message bhejo (OpenAI-compatible, conversation history ke saath) ──
-  async function callAnthropicAPI(message, history, systemPrompt, imageBase64) {
-    const apiKey  = ANTHROPIC_CONFIG.apiKey;
-    const baseURL = ANTHROPIC_CONFIG.baseURL;
-    const model   = getActiveModel();
-
-    // System message + conversation history + current message
-    const messages = [
-      { role: 'system', content: systemPrompt || AI_CONFIG.system_prompt },
-      ...history.map(h => ({ role: h.role, content: h.content })),
-    ];
-
-    // Current user message (image support ke saath)
-    if (imageBase64) {
-      const base64Data = imageBase64.split(',')[1] || imageBase64;
-      const mimeType = imageBase64.startsWith('data:image/png') ? 'image/png' : 'image/jpeg';
-      messages.push({
-        role: 'user',
-        content: [
-          { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64Data}` } },
-          { type: 'text', text: message || 'Is image ke baare mein batao.' }
-        ]
-      });
-    } else {
-      messages.push({ role: 'user', content: message });
-    }
-
-    const response = await fetch(baseURL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: model,
-        messages: messages,
-        max_tokens: 1024,
-      })
-    });
-
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      throw new Error(errData.error?.message || `HTTP ${response.status}`);
-    }
-
+  // GPT-5 API — single model, no Claude
+  async function callGPT5API(message, imageBase64) {
+    let url = `${AI_CONFIG.baseURL}?q=${encodeURIComponent(message)}`;
+    if (imageBase64) url += `&image=${encodeURIComponent(imageBase64)}`;
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
-    // OpenAI-compatible response format
-    return data.choices?.[0]?.message?.content || data.content?.[0]?.text || '';
+    if (!data.status || !data.results) throw new Error('Invalid API response');
+    return data.results;
   }
 
   // ── Free API fallback (GET request, no history) ──
@@ -831,15 +773,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     try {
       let replyText = '';
-      const useAnthropic = true; // Hardcoded: hamesha ecomagent API use karo
-
-      if (useAnthropic) {
-        // ✅ Anthropic API — conversation history ke saath
-        replyText = await callAnthropicAPI(message, historyBeforeSend, systemPrompt, selectedImageBase64);
-      } else {
-        // Free API (no history, fallback)
-        replyText = await callFreeAPI(message, selectedImageBase64);
-      }
+      // GPT-5 API — only one agent
+      replyText = await callGPT5API(message, selectedImageBase64);
 
       const ms = Math.round(performance.now()-t0);
 
@@ -1529,98 +1464,7 @@ document.addEventListener('DOMContentLoaded', function () {
       };
     }
 
-    // ── Anthropic API Key Section ──────────────────────────
-    const anthropicKeyInput  = document.getElementById('anthropicApiKeyInput');
-    const saveAnthropicBtn   = document.getElementById('saveAnthropicKeyBtn');
-    const testAnthropicBtn   = document.getElementById('testAnthropicKeyBtn');
-    const useAnthropicToggle = document.getElementById('useAnthropicToggle');
-    const anthropicMsg       = document.getElementById('anthropicKeyMsg');
-
-    // Load existing values
-    if (anthropicKeyInput) {
-      const savedKey = localStorage.getItem('rbl_anthropic_key') || '';
-      anthropicKeyInput.value = savedKey ? '••••••••' + savedKey.slice(-8) : '';
-      anthropicKeyInput.dataset.realKey = savedKey;
-      anthropicKeyInput.addEventListener('focus', function() {
-        if(this.value.startsWith('••')) this.value = this.dataset.realKey || '';
-      });
-      anthropicKeyInput.addEventListener('blur', function() {
-        const k = localStorage.getItem('rbl_anthropic_key') || '';
-        if(k && this.value === k) this.value = '••••••••' + k.slice(-8);
-      });
-    }
-    if (useAnthropicToggle) {
-      useAnthropicToggle.checked = localStorage.getItem('rbl_use_anthropic') === 'true';
-      useAnthropicToggle.addEventListener('change', function() {
-        localStorage.setItem('rbl_use_anthropic', this.checked ? 'true' : 'false');
-        const msg = document.getElementById('anthropicKeyMsg');
-        if(msg) {
-          msg.textContent = this.checked ? '✓ Anthropic API enabled!' : '✓ Free API mode enabled.';
-          msg.style.color = '#2ecc71';
-          msg.style.display = 'block';
-          setTimeout(() => msg.style.display = 'none', 2000);
-        }
-      });
-    }
-
-    function showAnthropicMsg(text, color) {
-      if(!anthropicMsg) return;
-      anthropicMsg.textContent = text;
-      anthropicMsg.style.color = color || '#00ced1';
-      anthropicMsg.style.display = 'block';
-      setTimeout(() => anthropicMsg.style.display = 'none', 3500);
-    }
-
-    if (saveAnthropicBtn && anthropicKeyInput) {
-      saveAnthropicBtn.onclick = () => {
-        let key = anthropicKeyInput.value.trim();
-        if (key.startsWith('••')) key = anthropicKeyInput.dataset.realKey || '';
-        if (!key) { showAnthropicMsg('❌ API key daalo!', '#e74c3c'); return; }
-        // ecomagent key validate - any bearer token format accepted
-        localStorage.setItem('rbl_anthropic_key', key);
-        anthropicKeyInput.dataset.realKey = key;
-        anthropicKeyInput.value = '••••••••' + key.slice(-8);
-        showAnthropicMsg('✓ API key save ho gayi!', '#2ecc71');
-        Analytics.addLog('info', 'Anthropic API key updated by admin.');
-      };
-    }
-
-    if (testAnthropicBtn) {
-      testAnthropicBtn.onclick = async () => {
-        let key = anthropicKeyInput?.value.trim();
-        if (key?.startsWith('••')) key = anthropicKeyInput.dataset.realKey || '';
-        key = key || localStorage.getItem('rbl_anthropic_key') || '';
-        if (!key) { showAnthropicMsg('❌ Pehle API key save karo.', '#e74c3c'); return; }
-        testAnthropicBtn.disabled = true;
-        testAnthropicBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing…';
-        try {
-          const resp = await fetch(ANTHROPIC_CONFIG.baseURL, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${ANTHROPIC_CONFIG.apiKey}`,
-            },
-            body: JSON.stringify({
-              model: ANTHROPIC_CONFIG.model,
-              messages: [{ role: 'user', content: 'Say OK' }],
-              max_tokens: 20,
-            })
-          });
-          if (resp.ok) {
-            showAnthropicMsg('✅ API key valid hai! Claude se connected.', '#2ecc71');
-            Analytics.addLog('info', 'Anthropic API test: SUCCESS');
-          } else {
-            const e = await resp.json().catch(()=>({}));
-            showAnthropicMsg(`❌ Test failed: ${e.error?.message || 'Invalid key'}`, '#e74c3c');
-          }
-        } catch(err) {
-          showAnthropicMsg(`❌ Network error: ${err.message}`, '#e74c3c');
-        } finally {
-          testAnthropicBtn.disabled = false;
-          testAnthropicBtn.innerHTML = '<i class="fas fa-flask"></i> Test';
-        }
-      };
-    }
+    // ── GPT-5 only mode — Claude/Anthropic section removed ──
 
     // ── Clear All Chat Histories ────────────────────────────
     const clearHistoryBtn = document.getElementById('clearAllHistoryBtn');
