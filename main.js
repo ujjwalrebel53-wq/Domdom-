@@ -285,7 +285,7 @@ const OTPEngine = (function() {
     _email    = email;
 
     // EmailJS configured hai ya nahi check karo
-    if (EMAILJS_CONFIG.PUBLIC_KEY === 'WJPN774FeTnl3kAcH') {
+    if (EMAILJS_CONFIG.PUBLIC_KEY === 'YOUR_PUBLIC_KEY') {
       // Dev mode — OTP console mein dikhao aur mock success return karo
       console.warn('⚠️  EmailJS not configured. OTP (dev mode):', otp);
       Analytics.addLog('warn', `[DEV MODE] OTP for ${email}: ${otp} (EmailJS not configured)`);
