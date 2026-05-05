@@ -26,6 +26,13 @@
       <div class="logo">Rebel Ai</div>
       <nav>
         <a href="#about" class="nav-link">About</a>
+        <a href="#" id="codespaceBtn" class="nav-link codespace-nav-btn">
+          <span class="codespace-btn-inner">
+            <i class="fas fa-code"></i>
+            <span>Codespace</span>
+          </span>
+          <span class="codespace-btn-shimmer"></span>
+        </a>
         <a href="#" id="adminPanelBtn" class="nav-link admin-nav-btn"><i class="fas fa-shield-alt"></i> Admin</a>
       </nav>
     </div>
@@ -376,6 +383,94 @@
           <button id="sendMessageBtn"><i class="fas fa-paper-plane"></i></button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       CODESPACE MODAL
+  ════════════════════════════════════════════ -->
+  <div id="codespaceModal" class="modal full-screen-modal">
+    <div class="modal-content codespace-modal-content full-screen-content">
+      <button class="auth-close-x" id="closeCodespaceModal">✕</button>
+
+      <!-- Top bar -->
+      <div class="cs-topbar">
+        <div class="cs-topbar-brand">
+          <span class="cs-logo-dot"></span>
+          <span class="cs-logo-text">Rebel <span>Codespace</span></span>
+        </div>
+        <div class="cs-topbar-status">
+          <span class="cs-status-dot" id="csStatusDot"></span>
+          <span id="csStatusLabel">Ready</span>
+        </div>
+      </div>
+
+      <!-- Hero area -->
+      <div class="cs-hero">
+        <div class="cs-hero-badge">
+          <i class="fas fa-bolt"></i> Powered by Rebel AI
+        </div>
+        <h2 class="cs-hero-title">
+          Your Cloud<br><span>Codespace</span>
+        </h2>
+        <p class="cs-hero-sub">
+          Spin up a blazing-fast dev environment in seconds. Code, build, and ship — anywhere, anytime.
+        </p>
+
+        <!-- CTA buttons — Cursor-style -->
+        <div class="cs-cta-row">
+          <button class="cs-btn-primary" id="csLaunchBtn">
+            <i class="fas fa-rocket"></i>
+            <span>Launch Codespace</span>
+          </button>
+          <button class="cs-btn-ghost" id="csLearnBtn">
+            <span>Learn more</span>
+            <i class="fas fa-arrow-right"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Feature grid — Cursor-style minimal cards -->
+      <div class="cs-features">
+        <div class="cs-feature-card">
+          <div class="cs-feature-icon"><i class="fas fa-terminal"></i></div>
+          <h4>Full Terminal</h4>
+          <p>Bash, Zsh, Fish — run any command in a real Linux shell</p>
+        </div>
+        <div class="cs-feature-card">
+          <div class="cs-feature-icon"><i class="fas fa-code-branch"></i></div>
+          <h4>Git Native</h4>
+          <p>Clone, commit, push — full Git workflow built in</p>
+        </div>
+        <div class="cs-feature-card">
+          <div class="cs-feature-icon"><i class="fas fa-brain"></i></div>
+          <h4>AI Pair Programmer</h4>
+          <p>Rebel AI assists you at every line — inline suggestions, refactors, reviews</p>
+        </div>
+        <div class="cs-feature-card">
+          <div class="cs-feature-icon"><i class="fas fa-cloud-upload-alt"></i></div>
+          <h4>Instant Deploy</h4>
+          <p>Ship to Vercel, Netlify, or any cloud with one command</p>
+        </div>
+      </div>
+
+      <!-- Terminal preview mockup -->
+      <div class="cs-terminal-preview">
+        <div class="cs-terminal-bar">
+          <span class="cs-dot red"></span>
+          <span class="cs-dot yellow"></span>
+          <span class="cs-dot green"></span>
+          <span class="cs-terminal-title">rebel-codespace ~ bash</span>
+        </div>
+        <div class="cs-terminal-body">
+          <div class="cs-terminal-line"><span class="cs-prompt">$</span> rebel init my-project</div>
+          <div class="cs-terminal-line cs-out">✓ Cloning template… done</div>
+          <div class="cs-terminal-line cs-out">✓ Installing dependencies… done</div>
+          <div class="cs-terminal-line cs-out">✓ Rebel AI activated</div>
+          <div class="cs-terminal-line"><span class="cs-prompt">$</span> rebel dev<span class="cs-cursor-blink">▌</span></div>
+        </div>
+      </div>
+
     </div>
   </div>
 

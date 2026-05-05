@@ -344,6 +344,72 @@ document.addEventListener('DOMContentLoaded', function () {
     document.addEventListener('keydown', e=>{ if(e.key==='Escape' && devModal.classList.contains('show')) close(); });
   }
 
+  // ── Codespace Modal ────────────────────────────────────────
+  const codespaceBtn   = document.getElementById('codespaceBtn');
+  const codespaceModal = document.getElementById('codespaceModal');
+  const closeCodespaceModal = document.getElementById('closeCodespaceModal');
+
+  function openCodespaceModal() {
+    if (codespaceModal) {
+      codespaceModal.classList.add('show');
+      document.body.style.overflow = 'hidden';
+    }
+  }
+
+  function closeCodespaceModalFn() {
+    if (codespaceModal) {
+      codespaceModal.classList.remove('show');
+      document.body.style.overflow = '';
+    }
+  }
+
+  if (codespaceBtn) {
+    codespaceBtn.addEventListener('click', e => {
+      e.preventDefault();
+      openCodespaceModal();
+    });
+  }
+
+  if (closeCodespaceModal) {
+    closeCodespaceModal.addEventListener('click', closeCodespaceModalFn);
+  }
+
+  if (codespaceModal) {
+    codespaceModal.addEventListener('click', e => {
+      if (e.target === codespaceModal) closeCodespaceModalFn();
+    });
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && codespaceModal && codespaceModal.classList.contains('show')) {
+      closeCodespaceModalFn();
+    }
+  });
+
+  // Launch / Learn more buttons inside Codespace modal
+  const csLaunchBtn = document.getElementById('csLaunchBtn');
+  const csLearnBtn  = document.getElementById('csLearnBtn');
+
+  if (csLaunchBtn) {
+    csLaunchBtn.addEventListener('click', () => {
+      csLaunchBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> <span>Initializing…</span>';
+      csLaunchBtn.disabled = true;
+      setTimeout(() => {
+        csLaunchBtn.innerHTML = '<i class="fas fa-check-circle"></i> <span>Coming Soon!</span>';
+        setTimeout(() => {
+          csLaunchBtn.innerHTML = '<i class="fas fa-rocket"></i> <span>Launch Codespace</span>';
+          csLaunchBtn.disabled = false;
+        }, 2200);
+      }, 1600);
+    });
+  }
+
+  if (csLearnBtn) {
+    csLearnBtn.addEventListener('click', () => {
+      window.open('https://cursor.com', '_blank', 'noopener');
+    });
+  }
+
   // ── Access Rebel Ai Modal ──────────────────────────────────
   const accessRebelBtn   = document.getElementById('accessRebelBtn');
   const accessRebelModal = document.getElementById('accessRebelModal');
