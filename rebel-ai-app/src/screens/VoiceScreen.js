@@ -9,6 +9,7 @@ import * as Speech from 'expo-speech';
 import { Audio } from 'expo-av';
 import * as Haptics from 'expo-haptics';
 import { Colors, Fonts } from '../theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getVaHistory, saveVaHistory, getVaMemory, saveVaMemory } from '../utils/storage';
 import { sendVoiceMessage, extractMemory, cleanForSpeech } from '../utils/api';
 import { speakText, stopSpeaking } from '../utils/tts';
@@ -21,6 +22,7 @@ const S_COLORS  = { 0: '#3a3a3a', 1: '#1d4ed8', 2: '#7c3aed', 3: '#10a37f' };
 const S_LABELS  = { 0: 'Tap to speak', 1: 'Listening...', 2: 'Thinking...', 3: 'Speaking...' };
 
 export default function VoiceScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const [state, setState] = useState(S.idle);
   const [transcript, setTranscript] = useState('');
   const [reply, setReply] = useState('');
@@ -279,9 +281,12 @@ export default function VoiceScreen({ navigation }) {
         )}
       </View>
 
+      {/* Bottom safe area spacer when no memory bar */}
+      {!vaMemory.userName && <View style={{ height: Math.max(insets.bottom, 16) }} />}
+
       {/* Memory badge */}
       {vaMemory.userName && (
-        <View style={styles.memBar}>
+        <View style={[styles.memBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           <Text style={styles.memText}>Remembers: {vaMemory.userName}</Text>
           <TouchableOpacity onPress={async () => { setVaMemory({}); setVaHistory([]); await saveVaMemory({}); await saveVaHistory([]); }}>
             <Text style={styles.memReset}>Reset</Text>
@@ -331,7 +336,7 @@ const styles = StyleSheet.create({
   aiBubble: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   aiAv: { width: 26, height: 26, borderRadius: 7, backgroundColor: Colors.accent, alignItems: 'center', justifyContent: 'center', marginTop: 2, flexShrink: 0 },
   aiText: { color: Colors.text, fontSize: Fonts.size.md, flex: 1, lineHeight: 22 },
-  memBar: { flexDirection: 'row', gap: 10, alignItems: 'center', paddingVertical: 10, paddingHorizontal: 20, borderTopWidth: 1, borderColor: Colors.borderSubtle, width: '100%', justifyContent: 'center', marginBottom: Platform.OS === 'ios' ? 20 : 10 },
+  memBar: { flexDirection: 'row', gap: 10, alignItems: 'center', paddingVertical: 10, paddingHorizontal: 20, borderTopWidth: 1, borderColor: 'rgba(255,255,255,0.08)', width: '100%', justifyContent: 'center' },
   memText: { color: Colors.textMuted, fontSize: Fonts.size.xs },
   memReset: { color: Colors.accent, fontSize: Fonts.size.xs, fontWeight: '600' },
   overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.88)', alignItems: 'center', justifyContent: 'flex-end', padding: 20, paddingBottom: 40 },

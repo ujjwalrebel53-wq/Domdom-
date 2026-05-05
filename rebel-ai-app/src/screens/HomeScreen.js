@@ -4,6 +4,7 @@ import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
   Alert, TextInput, Animated, StatusBar, Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Colors, Fonts, Radius } from '../theme';
 import {
@@ -13,6 +14,7 @@ import {
 import { getCurrentUser } from '../utils/storage';
 
 export default function HomeScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const [groups, setGroups] = useState([]);
   const [user, setUser] = useState(null);
   const [search, setSearch] = useState('');
@@ -133,7 +135,7 @@ export default function HomeScreen({ navigation }) {
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.bgSidebar} />
+      <StatusBar barStyle="light-content" backgroundColor={Colors.bg} />
 
       {/* Header */}
       <View style={styles.header}>
@@ -211,7 +213,7 @@ export default function HomeScreen({ navigation }) {
       {/* User info */}
       {user && (
         <TouchableOpacity
-          style={styles.userBar}
+          style={[styles.userBar, { paddingBottom: Math.max(insets.bottom, 14) }]}
           onPress={() => navigation.navigate('Settings')}
           activeOpacity={0.8}
         >
@@ -230,7 +232,7 @@ export default function HomeScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Colors.bgSidebar },
+  root: { flex: 1, backgroundColor: Colors.bg },
 
   header: { paddingTop: Platform.OS === 'android' ? 14 : 10, paddingHorizontal: 14, paddingBottom: 10 },
   headerTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
@@ -294,7 +296,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 12,
     paddingHorizontal: 14, paddingVertical: 14,
     borderTopWidth: 1, borderColor: Colors.borderSubtle,
-    backgroundColor: Colors.bgSidebar,
+    backgroundColor: Colors.bg,
   },
   userAvatarCircle: {
     width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.accent,

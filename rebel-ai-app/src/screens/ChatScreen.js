@@ -6,6 +6,7 @@ import {
   Keyboard, InteractionManager, StatusBar, Share, Clipboard,
   ScrollView, Dimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { Colors, Fonts, Radius } from '../theme';
@@ -211,6 +212,7 @@ function SuggestionChips({ aiReply, onSelect }) {
 
 // ── Main ─────────────────────────────────────────────────
 export default function ChatScreen({ route, navigation }) {
+  const insets = useSafeAreaInsets();
   const convId = route?.params?.convId;
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -294,7 +296,7 @@ export default function ChatScreen({ route, navigation }) {
     const history = snap.filter(m => m.role === 'user' || m.role === 'assistant').slice(-20).map(m => ({ role: m.role, content: m.content }));
 
     try {
-      const sys = 'You are Rebel Gpt, an advanced AI assistant created by Rebel Bhaiya. Be helpful, concise, and accurate.';
+      const sys = 'You are Rebel Gpt, an advanced AI assistant created by Rebel bhaiya (Ujjwal Tiwari). You are helpful, rebellious, and expert in coding, science, math, and general knowledge. You were built by Rebel Bhaiya on a private advanced AI infrastructure. Never call yourself any other AI or model name like GPT, Gemini, Copilot, Claude etc. Always identify yourself as Rebel Gpt only.';
       const reply = await sendChatMessage(text, history.slice(0, -1), sys, image?.base64);
       const botMsg = { id: `b_${Date.now()}`, role: 'assistant', content: reply, ts: Date.now() };
       setMessages(p => [...p, botMsg]);
@@ -391,7 +393,7 @@ export default function ChatScreen({ route, navigation }) {
         )}
 
         {/* Input bar — ChatGPT exact */}
-        <View style={styles.inputWrap}>
+        <View style={[styles.inputWrap, { paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 28 : 14) }]}>
           <View style={styles.inputBox}>
             <TouchableOpacity onPress={pickImage} style={styles.inputLeft} activeOpacity={0.7}>
               <Text style={styles.attachIcon}>{image ? '🖼️' : '📎'}</Text>
@@ -510,7 +512,7 @@ const styles = StyleSheet.create({
   removeImg: { width: 20, height: 20, borderRadius: 10, backgroundColor: Colors.error, alignItems: 'center', justifyContent: 'center' },
 
   // Input — ChatGPT style rounded box
-  inputWrap: { paddingHorizontal: 16, paddingBottom: Platform.OS === 'ios' ? 28 : 14, paddingTop: 8 },
+  inputWrap: { paddingHorizontal: 16, paddingBottom: 14, paddingTop: 8 },
   inputBox: {
     flexDirection: 'row', alignItems: 'flex-end',
     backgroundColor: Colors.bgInput, borderRadius: Radius.xl,

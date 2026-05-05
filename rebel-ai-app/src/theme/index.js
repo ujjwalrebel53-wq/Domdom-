@@ -1,37 +1,39 @@
-// ChatGPT-exact color palette
+// Website exact colors — #121212 bg, #8a2be2 purple, #00ced1 teal
 export const Colors = {
-  // Backgrounds
-  bg: '#212121',           // ChatGPT main bg
-  bgSidebar: '#171717',    // ChatGPT sidebar
-  bgCard: '#2f2f2f',       // Cards / elevated
-  bgInput: '#2f2f2f',      // Input fields
-  bgUserMsg: '#2f2f2f',    // User message pill
-  bgHover: '#3a3a3a',      // Hover state
+  bg: '#121212',
+  bgSecondary: '#1e1e1e',
+  bgCard: '#252525',
+  bgInput: '#2a2a2a',
+  bgUserMsg: '#8a2be2',
+  bgHover: '#2f2f2f',
 
-  // Text
-  text: '#ececec',          // Primary text
-  textSecondary: '#8e8ea0', // Secondary / muted
-  textMuted: '#565869',     // Very muted
+  purple: '#8a2be2',
+  teal: '#00ced1',
+  purpleLight: '#a855f7',
+  tealLight: '#22d3ee',
+  purpleGlow: 'rgba(138,43,226,0.4)',
+  tealGlow: 'rgba(0,206,209,0.35)',
 
-  // Accent
-  accent: '#10a37f',        // ChatGPT green
-  accentLight: '#1ac694',
-  accentGlow: 'rgba(16,163,127,0.3)',
+  border: 'rgba(255,255,255,0.07)',
+  borderPurple: 'rgba(138,43,226,0.4)',
+  borderSubtle: 'rgba(255,255,255,0.05)',
 
-  // Border
-  border: 'rgba(255,255,255,0.1)',
-  borderSubtle: 'rgba(255,255,255,0.06)',
+  text: '#ffffff',
+  textSecondary: '#b3b3b3',
+  textMuted: '#666680',
 
-  // Status
+  accent: '#8a2be2',
+  accentTeal: '#00ced1',
+
   error: '#ef4444',
-  success: '#10a37f',
+  success: '#22c55e',
   white: '#ffffff',
+};
 
-  // Voice orb colors
-  orbIdle: '#10a37f',
-  orbListening: '#3b82f6',
-  orbThinking: '#8b5cf6',
-  orbSpeaking: '#10a37f',
+export const Gradient = {
+  colors: ['#8a2be2', '#00ced1'],
+  start: { x: 0, y: 0 },
+  end: { x: 1, y: 0 },
 };
 
 export const Fonts = {
