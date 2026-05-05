@@ -1,211 +1,205 @@
+// ChatGPT-exact chat screen
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet,
-  KeyboardAvoidingView, Platform, Animated, Image,
-  Alert, Keyboard, InteractionManager, StatusBar,
-  Share, Clipboard, ScrollView, Dimensions,
+  KeyboardAvoidingView, Platform, Animated, Image, Alert,
+  Keyboard, InteractionManager, StatusBar, Share, Clipboard,
+  ScrollView, Dimensions,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
-import LinearGradient from 'react-native-linear-gradient';
 import { Colors, Fonts, Radius } from '../theme';
+import { getCurrentUser, getSettings } from '../utils/storage';
 import {
-  getChatHistory, addChatMessage, clearChatHistory,
-  getCurrentUser, getSettings,
-} from '../utils/storage';
+  getMessages, addMessage as addMsgToConv, clearMessages, updateConversationTitle, createConversation,
+} from '../utils/conversations';
 import { sendChatMessage } from '../utils/api';
 import { getFollowUpSuggestions, WELCOME_PROMPTS } from '../utils/suggestions';
 import { trackMessage, trackSession } from '../utils/stats';
-import TypingDots from '../components/TypingDots';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-let msgId = 0;
-const newId = () => `m${++msgId}_${Date.now()}`;
+const { width: SW } = Dimensions.get('window');
 
-// ── Typewriter ──────────────────────────────────────────
-function useTypewriter(text, enabled, speed = 14) {
+// ── Typewriter ───────────────────────────────────────────
+function useTypewriter(text, enabled, speed = 12) {
   const [displayed, setDisplayed] = useState('');
   const [done, setDone] = useState(false);
-  const idxRef = useRef(0);
-  const timerRef = useRef(null);
-
+  const ref = useRef(0);
+  const timer = useRef(null);
   useEffect(() => {
     if (!enabled || !text) { setDisplayed(text || ''); setDone(true); return; }
-    setDisplayed(''); setDone(false); idxRef.current = 0;
+    setDisplayed(''); setDone(false); ref.current = 0;
     function tick() {
-      if (idxRef.current < text.length) {
-        setDisplayed(text.slice(0, idxRef.current + 1));
-        idxRef.current++;
-        timerRef.current = setTimeout(tick, speed);
-      } else { setDone(true); }
+      if (ref.current < text.length) {
+        setDisplayed(text.slice(0, ++ref.current));
+        timer.current = setTimeout(tick, speed);
+      } else setDone(true);
     }
-    timerRef.current = setTimeout(tick, speed);
-    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+    timer.current = setTimeout(tick, speed);
+    return () => clearTimeout(timer.current);
   }, [text, enabled]);
-
   return { displayed, done };
 }
 
-// ── Code block renderer ─────────────────────────────────
-function renderContent(text, textStyle) {
+// ── Content renderer: code blocks, bold ─────────────────
+function ContentRenderer({ text, style }) {
   if (!text) return null;
-  const parts = text.split(/(```[\s\S]*?```|`[^`]+`)/g);
-  return parts.map((part, i) => {
-    if (part.startsWith('```') && part.endsWith('```')) {
-      const inner = part.slice(3, -3).replace(/^[a-z]+\n/, '');
-      return (
-        <View key={i} style={styles.codeBlock}>
-          <View style={styles.codeHeader}>
-            <Text style={styles.codeLang}>code</Text>
-            <TouchableOpacity onPress={() => { Clipboard.setString(inner); }}>
-              <Text style={styles.codeCopy}>Copy</Text>
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.codeText}>{inner.trim()}</Text>
-        </View>
-      );
-    }
-    if (part.startsWith('`') && part.endsWith('`')) {
-      return <Text key={i} style={styles.inlineCode}>{part.slice(1, -1)}</Text>;
-    }
-    // Bold: **text**
-    const boldParts = part.split(/(\*\*[^*]+\*\*)/g);
-    return (
-      <Text key={i} style={textStyle}>
-        {boldParts.map((bp, bi) => {
-          if (bp.startsWith('**') && bp.endsWith('**')) {
-            return <Text key={bi} style={[textStyle, { fontWeight: '700', color: Colors.white }]}>{bp.slice(2, -2)}</Text>;
-          }
-          return <Text key={bi}>{bp}</Text>;
-        })}
-      </Text>
-    );
-  });
+  const parts = text.split(/(```[\s\S]*?```|`[^`\n]+`)/g);
+  return (
+    <View>
+      {parts.map((part, i) => {
+        if (part.startsWith('```') && part.endsWith('```')) {
+          const inner = part.slice(3, -3).replace(/^[a-z]*\n/, '');
+          return (
+            <View key={i} style={styles.codeBlock}>
+              <View style={styles.codeHeader}>
+                <Text style={styles.codeLang}>code</Text>
+                <TouchableOpacity onPress={() => Clipboard.setString(inner)}>
+                  <Text style={styles.codeCopy}>Copy code</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <Text style={styles.codeText}>{inner.trim()}</Text>
+              </ScrollView>
+            </View>
+          );
+        }
+        if (part.startsWith('`') && part.endsWith('`')) {
+          return <Text key={i} style={styles.inlineCode}>{part.slice(1, -1)}</Text>;
+        }
+        // Bold
+        const bolds = part.split(/(\*\*[^*]+\*\*)/g);
+        return (
+          <Text key={i} style={style}>
+            {bolds.map((b, bi) =>
+              b.startsWith('**') && b.endsWith('**')
+                ? <Text key={bi} style={[style, { fontWeight: '700', color: Colors.text }]}>{b.slice(2, -2)}</Text>
+                : <Text key={bi}>{b}</Text>
+            )}
+          </Text>
+        );
+      })}
+    </View>
+  );
 }
 
-// ── Message bubble ──────────────────────────────────────
-const MessageBubble = memo(({ message, isLatestBot, onLongPress }) => {
+// ── Message row — ChatGPT exact layout ──────────────────
+const MessageRow = memo(({ message, isLatestBot, onLongPress }) => {
   const isUser = message.role === 'user';
-  const slideX = useRef(new Animated.Value(isUser ? 45 : -45)).current;
   const opacity = useRef(new Animated.Value(0)).current;
-
-  const { displayed, done } = useTypewriter(message.content, !isUser && isLatestBot, 13);
+  const slideY = useRef(new Animated.Value(8)).current;
+  const { displayed, done } = useTypewriter(message.content, !isUser && isLatestBot, 12);
+  const shown = (!isUser && isLatestBot) ? displayed : message.content;
 
   useEffect(() => {
     InteractionManager.runAfterInteractions(() => {
       Animated.parallel([
-        Animated.timing(opacity, { toValue: 1, duration: 260, useNativeDriver: true }),
-        Animated.spring(slideX, { toValue: 0, friction: 9, tension: 80, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: 220, useNativeDriver: true }),
+        Animated.timing(slideY, { toValue: 0, duration: 220, useNativeDriver: true }),
       ]).start();
     });
   }, []);
 
-  const shownText = (!isUser && isLatestBot) ? displayed : message.content;
-
-  function formatTime(ts) {
-    if (!ts) return '';
-    return new Date(ts).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+  if (isUser) {
+    return (
+      <Animated.View style={[styles.userRow, { opacity, transform: [{ translateY: slideY }] }]}>
+        <TouchableOpacity
+          onLongPress={() => onLongPress(message)}
+          activeOpacity={0.85}
+          style={styles.userBubble}
+        >
+          {message.image && <Image source={{ uri: message.image }} style={styles.msgImage} />}
+          <Text style={styles.userText}>{message.content}</Text>
+        </TouchableOpacity>
+      </Animated.View>
+    );
   }
 
   return (
-    <Animated.View style={[
-      styles.bubbleRow,
-      isUser ? styles.bubbleRowUser : styles.bubbleRowBot,
-      { opacity, transform: [{ translateX: slideX }] },
-    ]}>
-      {!isUser && (
-        <LinearGradient colors={['#8a2be2', '#00ced1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.botAvatar}>
-          <Text style={styles.botAvatarText}>R</Text>
-        </LinearGradient>
-      )}
-      <TouchableOpacity
-        onLongPress={() => onLongPress && onLongPress(message)}
-        activeOpacity={0.92}
-        style={{ flexShrink: 1, maxWidth: '100%' }}
-      >
-        <View style={[
-          styles.bubble,
-          isUser ? styles.bubbleUser : styles.bubbleBot,
-          message.isError && styles.bubbleError,
-        ]}>
-          {message.image && (
-            <Image source={{ uri: message.image }} style={styles.msgImage} resizeMode="cover" />
-          )}
-          {isUser
-            ? <Text style={styles.bubbleTextUser}>{message.content}</Text>
-            : (
-              <View>
-                {renderContent(shownText, styles.bubbleTextBot)}
-                {isLatestBot && !done && (
-                  <Text style={{ color: Colors.teal, fontSize: 16 }}>▌</Text>
-                )}
-              </View>
-            )
-          }
-          <Text style={[styles.timeText, isUser && styles.timeTextUser]}>
-            {formatTime(message.ts)}
-          </Text>
+    <Animated.View style={[styles.aiRow, { opacity, transform: [{ translateY: slideY }] }]}>
+      <View style={styles.aiAvatarWrap}>
+        <View style={styles.aiAvatar}>
+          <Text style={styles.aiAvatarText}>R</Text>
         </View>
+      </View>
+      <TouchableOpacity
+        onLongPress={() => onLongPress(message)}
+        activeOpacity={0.85}
+        style={styles.aiContent}
+      >
+        <ContentRenderer text={shown} style={styles.aiText} />
+        {!done && isLatestBot && <Text style={styles.cursor}>▌</Text>}
+        {done && (
+          <View style={styles.aiActions}>
+            <TouchableOpacity onPress={() => Clipboard.setString(message.content)} style={styles.aiActionBtn}>
+              <Text style={styles.aiActionIcon}>📋</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => Share.share({ message: message.content })} style={styles.aiActionBtn}>
+              <Text style={styles.aiActionIcon}>🔗</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </TouchableOpacity>
     </Animated.View>
   );
 });
 
-// ── Thinking indicator ──────────────────────────────────
-function ThinkingBubble() {
+// ── Thinking row ─────────────────────────────────────────
+function ThinkingRow() {
+  const dots = [useRef(new Animated.Value(0)).current, useRef(new Animated.Value(0)).current, useRef(new Animated.Value(0)).current];
+  useEffect(() => {
+    const anims = dots.map((d, i) => Animated.loop(Animated.sequence([
+      Animated.delay(i * 150),
+      Animated.timing(d, { toValue: -5, duration: 250, useNativeDriver: true }),
+      Animated.timing(d, { toValue: 0, duration: 250, useNativeDriver: true }),
+      Animated.delay(450 - i * 150),
+    ])));
+    anims.forEach(a => a.start());
+    return () => anims.forEach(a => a.stop());
+  }, []);
   return (
-    <View style={[styles.bubbleRow, styles.bubbleRowBot]}>
-      <LinearGradient colors={['#8a2be2', '#00ced1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.botAvatar}>
-        <Text style={styles.botAvatarText}>R</Text>
-      </LinearGradient>
-      <View style={[styles.bubble, styles.bubbleBot]}>
-        <TypingDots />
+    <View style={styles.aiRow}>
+      <View style={styles.aiAvatarWrap}>
+        <View style={styles.aiAvatar}><Text style={styles.aiAvatarText}>R</Text></View>
+      </View>
+      <View style={styles.aiContent}>
+        <View style={{ flexDirection: 'row', gap: 4, paddingVertical: 6 }}>
+          {dots.map((d, i) => (
+            <Animated.View key={i} style={[styles.thinkDot, { transform: [{ translateY: d }] }]} />
+          ))}
+        </View>
       </View>
     </View>
   );
 }
 
-// ── Welcome prompts (shown when chat is empty) ──────────
-function WelcomeGrid({ onSelect, userName }) {
+// ── Welcome screen (empty chat) ──────────────────────────
+function WelcomeView({ onSelect, userName }) {
   const fade = useRef(new Animated.Value(0)).current;
-  const slide = useRef(new Animated.Value(20)).current;
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fade, { toValue: 1, duration: 600, useNativeDriver: true }),
-      Animated.timing(slide, { toValue: 0, duration: 600, useNativeDriver: true }),
-    ]).start();
-  }, []);
+  useEffect(() => { Animated.timing(fade, { toValue: 1, duration: 500, useNativeDriver: true }).start(); }, []);
   return (
-    <Animated.View style={[styles.welcomeWrap, { opacity: fade, transform: [{ translateY: slide }] }]}>
-      <LinearGradient colors={['#8a2be2', '#00ced1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.welcomeAvatar}>
-        <Text style={{ fontSize: 40 }}>R</Text>
-      </LinearGradient>
-      <Text style={styles.welcomeTitle}>Hello{userName ? ', ' + userName : ''}!</Text>
-      <Text style={styles.welcomeSub}>I'm Rebel Gpt. How can I help you today?</Text>
+    <Animated.ScrollView style={{ opacity: fade }} contentContainerStyle={styles.welcomeWrap} showsVerticalScrollIndicator={false}>
+      <View style={styles.welcomeLogoWrap}>
+        <View style={styles.welcomeLogo}><Text style={styles.welcomeLogoText}>R</Text></View>
+      </View>
+      <Text style={styles.welcomeTitle}>How can I help you{userName ? ', ' + userName : ''}?</Text>
       <View style={styles.promptGrid}>
         {WELCOME_PROMPTS.map((p, i) => (
-          <TouchableOpacity key={i} style={styles.promptCard} onPress={() => onSelect(p.subtitle)} activeOpacity={0.78}>
+          <TouchableOpacity key={i} style={styles.promptCard} onPress={() => onSelect(p.subtitle)} activeOpacity={0.75}>
             <Text style={styles.promptEmoji}>{p.emoji}</Text>
             <Text style={styles.promptTitle}>{p.title}</Text>
             <Text style={styles.promptSub}>{p.subtitle}</Text>
           </TouchableOpacity>
         ))}
       </View>
-    </Animated.View>
+    </Animated.ScrollView>
   );
 }
 
-// ── Follow-up chips ─────────────────────────────────────
+// ── Suggestion chips ─────────────────────────────────────
 function SuggestionChips({ aiReply, onSelect }) {
   const chips = getFollowUpSuggestions(aiReply);
-  const scrollX = useRef(new Animated.Value(0)).current;
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.chipsRow}
-      style={styles.chipsScroll}
-    >
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
       {chips.map((c, i) => (
         <TouchableOpacity key={i} style={styles.chip} onPress={() => onSelect(c)} activeOpacity={0.8}>
           <Text style={styles.chipText}>{c}</Text>
@@ -215,187 +209,143 @@ function SuggestionChips({ aiReply, onSelect }) {
   );
 }
 
-// ── Main screen ─────────────────────────────────────────
-export default function ChatScreen() {
+// ── Main ─────────────────────────────────────────────────
+export default function ChatScreen({ route, navigation }) {
+  const convId = route?.params?.convId;
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [image, setImage] = useState(null);
   const [user, setUser] = useState(null);
-  const [settings, setSettings] = useState({});
   const [latestBotId, setLatestBotId] = useState(null);
-  const [lastBotReply, setLastBotReply] = useState('');
-  const [showScrollFab, setShowScrollFab] = useState(false);
+  const [lastReply, setLastReply] = useState('');
   const [isEmpty, setIsEmpty] = useState(true);
+  const [showFab, setShowFab] = useState(false);
+  const fabOpacity = useRef(new Animated.Value(0)).current;
   const listRef = useRef(null);
   const sendScale = useRef(new Animated.Value(1)).current;
-  const fabOpacity = useRef(new Animated.Value(0)).current;
+  const currentConvId = useRef(convId);
 
   useEffect(() => {
     (async () => {
-      const [cu, s] = await Promise.all([getCurrentUser(), getSettings()]);
-      setUser(cu); setSettings(s);
-      await trackSession();
-      const email = cu?.email || 'guest';
-      const hist = await getChatHistory(email);
-      if (hist.length) {
-        setMessages(hist.map(m => ({ id: newId(), ...m })));
-        setIsEmpty(false);
+      const cu = await getCurrentUser();
+      setUser(cu);
+      if (convId) {
+        currentConvId.current = convId;
+        const msgs = await getMessages(convId);
+        if (msgs.length) { setMessages(msgs); setIsEmpty(false); }
+        else setIsEmpty(true);
       }
     })();
-  }, []);
+  }, [convId]);
 
-  // FAB visibility
   useEffect(() => {
-    Animated.timing(fabOpacity, {
-      toValue: showScrollFab ? 1 : 0,
-      duration: 200, useNativeDriver: true,
-    }).start();
-  }, [showScrollFab]);
+    Animated.timing(fabOpacity, { toValue: showFab ? 1 : 0, duration: 180, useNativeDriver: true }).start();
+  }, [showFab]);
 
-  const scrollToBottom = useCallback(() => {
+  const scrollToEnd = useCallback(() => {
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
   }, []);
 
-  function onScroll(e) {
-    const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
-    const distFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
-    setShowScrollFab(distFromBottom > 200);
+  async function getOrCreateConvId() {
+    if (currentConvId.current) return currentConvId.current;
+    const conv = await createConversation('New Chat');
+    currentConvId.current = conv.id;
+    return conv.id;
   }
 
   async function pickImage() {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) { Alert.alert('Permission needed', 'Allow photo access to attach images.'); return; }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.72, base64: true,
-    });
-    if (!result.canceled && result.assets[0]) {
-      setImage({ uri: result.assets[0].uri, base64: result.assets[0].base64 });
-    }
+    const p = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!p.granted) { Alert.alert('Permission needed', 'Allow photo access to attach images.'); return; }
+    const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.72, base64: true });
+    if (!r.canceled && r.assets[0]) setImage({ uri: r.assets[0].uri, base64: r.assets[0].base64 });
   }
 
   function handleLongPress(msg) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Alert.alert('Message Options', '', [
-      { text: '📋 Copy', onPress: () => Clipboard.setString(msg.content) },
-      {
-        text: '🔗 Share', onPress: () => Share.share({
-          message: msg.role === 'assistant' ? `Rebel Gpt says:\n\n${msg.content}` : msg.content,
-        }),
-      },
+    Alert.alert('', '', [
+      { text: '📋 Copy text', onPress: () => Clipboard.setString(msg.content) },
+      { text: '🔗 Share', onPress: () => Share.share({ message: msg.content }) },
       { text: 'Cancel', style: 'cancel' },
     ]);
   }
 
-  function animateSend() {
+  const doSend = useCallback(async (override) => {
+    const text = (override ?? input).trim();
+    if (!text && !image) return;
     Animated.sequence([
-      Animated.timing(sendScale, { toValue: 0.80, duration: 80, useNativeDriver: true }),
+      Animated.timing(sendScale, { toValue: 0.82, duration: 70, useNativeDriver: true }),
       Animated.spring(sendScale, { toValue: 1, friction: 4, tension: 120, useNativeDriver: true }),
     ]).start();
-  }
-
-  const doSend = useCallback(async (overrideText) => {
-    const text = (overrideText ?? input).trim();
-    if (!text && !image) return;
-    animateSend();
-    if (!overrideText) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (!override) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     Keyboard.dismiss();
     setIsEmpty(false);
 
-    const userMsg = { id: newId(), role: 'user', content: text, image: image?.uri, ts: Date.now() };
-    const snapshotMsgs = [...messages, userMsg];
-    setMessages(snapshotMsgs);
-    setInput(''); setImage(null); setLoading(true); setLastBotReply('');
+    const cid = await getOrCreateConvId();
 
-    const email = user?.email || 'guest';
-    await addChatMessage(email, 'user', text);
+    const userMsg = { id: `u_${Date.now()}`, role: 'user', content: text, image: image?.uri, ts: Date.now() };
+    const snap = [...messages, userMsg];
+    setMessages(snap);
+    setInput(''); setImage(null); setLoading(true); setLastReply('');
+
+    await addMsgToConv(cid, 'user', text, image?.uri);
     await trackMessage();
 
-    const historyForApi = snapshotMsgs
-      .filter(m => m.role === 'user' || m.role === 'assistant')
-      .slice(-20).map(m => ({ role: m.role, content: m.content }));
+    const history = snap.filter(m => m.role === 'user' || m.role === 'assistant').slice(-20).map(m => ({ role: m.role, content: m.content }));
 
     try {
-      const sysPrompt = 'You are Rebel Gpt, an advanced AI assistant created by Rebel Bhaiya (Ujjwal Tiwari). Be helpful, knowledgeable, and concise.';
-      const reply = await sendChatMessage(text, historyForApi.slice(0, -1), sysPrompt, image?.base64);
-      const botId = newId();
-      const botMsg = { id: botId, role: 'assistant', content: reply, ts: Date.now() };
-      setMessages(prev => [...prev, botMsg]);
-      setLatestBotId(botId);
-      setLastBotReply(reply);
-      await addChatMessage(email, 'assistant', reply);
+      const sys = 'You are Rebel Gpt, an advanced AI assistant created by Rebel Bhaiya. Be helpful, concise, and accurate.';
+      const reply = await sendChatMessage(text, history.slice(0, -1), sys, image?.base64);
+      const botMsg = { id: `b_${Date.now()}`, role: 'assistant', content: reply, ts: Date.now() };
+      setMessages(p => [...p, botMsg]);
+      setLatestBotId(botMsg.id);
+      setLastReply(reply);
+      await addMsgToConv(cid, 'assistant', reply, null);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      scrollToBottom();
-    } catch (err) {
-      const errId = newId();
-      setMessages(prev => [...prev, {
-        id: errId, role: 'assistant',
-        content: 'Unable to reach AI right now. Please check your connection and try again.',
-        ts: Date.now(), isError: true,
-      }]);
+      scrollToEnd();
+    } catch {
+      const err = { id: `e_${Date.now()}`, role: 'assistant', content: 'Something went wrong. Please try again.', ts: Date.now(), isError: true };
+      setMessages(p => [...p, err]);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally { setLoading(false); }
-  }, [input, image, messages, user]);
+  }, [input, image, messages]);
 
-  function confirmClear() {
-    Alert.alert('New Chat', 'Start a fresh conversation?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'New Chat', onPress: async () => {
-          await clearChatHistory(user?.email || 'guest');
-          setMessages([]); setIsEmpty(true);
-          setLatestBotId(null); setLastBotReply('');
-        },
-      },
-    ]);
-  }
-
-  const canSend = (input.trim().length > 0 || !!image) && !loading;
+  const canSend = (input.trim() || !!image) && !loading;
 
   const renderItem = useCallback(({ item }) => (
-    <MessageBubble message={item} isLatestBot={item.id === latestBotId} onLongPress={handleLongPress} />
+    <MessageRow message={item} isLatestBot={item.id === latestBotId} onLongPress={handleLongPress} />
   ), [latestBotId]);
 
-  const keyExtractor = useCallback(item => item.id, []);
-
-  const charCount = input.length;
-  const showCounter = charCount > 200;
+  const keyExtractor = useCallback(m => m.id, []);
 
   return (
     <View style={styles.root}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.bg} />
 
-      {/* ── Header ── */}
+      {/* Header */}
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <LinearGradient colors={['#8a2be2', '#00ced1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.headerAvatar}>
-            <Text style={styles.headerAvatarText}>R</Text>
-          </LinearGradient>
-          <View>
-            <Text style={styles.headerTitle}>Rebel <Text style={{ color: Colors.teal }}>Gpt</Text></Text>
-            <View style={styles.headerStatusRow}>
-              <View style={[styles.statusDot, { backgroundColor: loading ? Colors.teal : '#22c55e' }]} />
-              <Text style={styles.headerStatus}>{loading ? 'Thinking...' : 'Online · GPT-5'}</Text>
-            </View>
-          </View>
-        </View>
-        <TouchableOpacity onPress={confirmClear} style={styles.newChatBtn} activeOpacity={0.8}>
-          <LinearGradient colors={['rgba(138,43,226,0.18)', 'rgba(0,206,209,0.12)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.newChatGrad}>
-            <Text style={styles.newChatText}>✚ New</Text>
-          </LinearGradient>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Text style={styles.backIcon}>☰</Text>
+        </TouchableOpacity>
+        <Text style={styles.headerTitle} numberOfLines={1}>
+          {route?.params?.convTitle || 'New chat'}
+        </Text>
+        <TouchableOpacity
+          onPress={async () => {
+            const cid = await getOrCreateConvId();
+            await clearMessages(cid);
+            setMessages([]); setIsEmpty(true); setLastReply('');
+          }}
+          style={styles.headerNewBtn}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Text style={styles.headerNewIcon}>✏️</Text>
         </TouchableOpacity>
       </View>
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
-      >
-        {/* ── Messages or Welcome ── */}
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}>
         {isEmpty ? (
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
-            <WelcomeGrid onSelect={text => { setInput(text); }} userName={user?.name} />
-          </ScrollView>
+          <WelcomeView onSelect={t => { setInput(t); }} userName={user?.name} />
         ) : (
           <FlatList
             ref={listRef}
@@ -404,74 +354,74 @@ export default function ChatScreen() {
             renderItem={renderItem}
             contentContainerStyle={styles.list}
             showsVerticalScrollIndicator={false}
-            onScroll={onScroll}
-            scrollEventThrottle={120}
-            onContentSizeChange={scrollToBottom}
-            ListFooterComponent={loading ? <ThinkingBubble /> : null}
+            onScroll={e => {
+              const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+              setShowFab(contentSize.height - layoutMeasurement.height - contentOffset.y > 220);
+            }}
+            scrollEventThrottle={100}
+            onContentSizeChange={scrollToEnd}
+            ListFooterComponent={loading ? <ThinkingRow /> : null}
             removeClippedSubviews={Platform.OS === 'android'}
             maxToRenderPerBatch={10}
             windowSize={10}
-            initialNumToRender={15}
+            initialNumToRender={16}
           />
         )}
 
-        {/* ── Scroll to bottom FAB ── */}
-        <Animated.View style={[styles.fab, { opacity: fabOpacity }]} pointerEvents={showScrollFab ? 'auto' : 'none'}>
-          <TouchableOpacity onPress={scrollToBottom} style={styles.fabBtn} activeOpacity={0.8}>
-            <LinearGradient colors={['#8a2be2', '#00ced1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.fabGrad}>
-              <Text style={styles.fabIcon}>↓</Text>
-            </LinearGradient>
+        {/* Scroll FAB */}
+        <Animated.View style={[styles.fab, { opacity: fabOpacity }]} pointerEvents={showFab ? 'auto' : 'none'}>
+          <TouchableOpacity onPress={scrollToEnd} style={styles.fabBtn}>
+            <Text style={styles.fabIcon}>↓</Text>
           </TouchableOpacity>
         </Animated.View>
 
-        {/* ── Follow-up chips ── */}
-        {!!lastBotReply && !loading && (
-          <SuggestionChips aiReply={lastBotReply} onSelect={text => doSend(text)} />
+        {/* Follow-up chips */}
+        {!!lastReply && !loading && (
+          <SuggestionChips aiReply={lastReply} onSelect={t => doSend(t)} />
         )}
 
-        {/* ── Image preview ── */}
+        {/* Image preview */}
         {image && (
-          <View style={styles.imgPreviewRow}>
+          <View style={styles.imgRow}>
             <Image source={{ uri: image.uri }} style={styles.previewImg} />
-            <TouchableOpacity onPress={() => setImage(null)} style={styles.removeImgBtn}>
+            <TouchableOpacity onPress={() => setImage(null)} style={styles.removeImg}>
               <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>✕</Text>
             </TouchableOpacity>
-            <Text style={styles.imgLabel}>Image attached</Text>
           </View>
         )}
 
-        {/* ── Input bar ── */}
-        <View style={styles.inputBar}>
-          <TouchableOpacity onPress={pickImage} style={styles.attachBtn} activeOpacity={0.7}>
-            <Text style={styles.attachIcon}>{image ? '🖼️' : '📎'}</Text>
-          </TouchableOpacity>
-          <View style={styles.inputWrap}>
+        {/* Input bar — ChatGPT exact */}
+        <View style={styles.inputWrap}>
+          <View style={styles.inputBox}>
+            <TouchableOpacity onPress={pickImage} style={styles.inputLeft} activeOpacity={0.7}>
+              <Text style={styles.attachIcon}>{image ? '🖼️' : '📎'}</Text>
+            </TouchableOpacity>
             <TextInput
               style={styles.textInput}
-              placeholder="Message Rebel Gpt..."
+              placeholder="Message Rebel AI..."
               placeholderTextColor={Colors.textMuted}
               value={input}
               onChangeText={setInput}
               multiline
               maxLength={4000}
             />
-            {showCounter && (
-              <Text style={[styles.charCount, charCount > 3500 && { color: Colors.error }]}>
-                {charCount}/4000
+            {input.length > 200 && (
+              <Text style={[styles.charCount, input.length > 3500 && { color: Colors.error }]}>
+                {input.length}/4000
               </Text>
             )}
-          </View>
-          <Animated.View style={{ transform: [{ scale: sendScale }] }}>
-            <TouchableOpacity onPress={() => doSend()} disabled={!canSend} activeOpacity={1}>
-              <LinearGradient
-                colors={canSend ? ['#8a2be2', '#00ced1'] : ['#2a2a2a', '#2a2a2a']}
-                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                style={styles.sendBtn}
+            <Animated.View style={{ transform: [{ scale: sendScale }] }}>
+              <TouchableOpacity
+                onPress={() => doSend()}
+                disabled={!canSend}
+                style={[styles.sendBtn, canSend && styles.sendBtnActive]}
+                activeOpacity={0.85}
               >
-                <Text style={[styles.sendIcon, !canSend && { opacity: 0.35 }]}>↑</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </Animated.View>
+                <Text style={[styles.sendIcon, !canSend && { opacity: 0.3 }]}>↑</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </View>
+          <Text style={styles.disclaimer}>Rebel AI can make mistakes. Verify important info.</Text>
         </View>
       </KeyboardAvoidingView>
     </View>
@@ -485,112 +435,101 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingTop: Platform.OS === 'android' ? 14 : 10, paddingBottom: 12,
-    borderBottomWidth: 1, borderColor: 'rgba(138,43,226,0.2)',
-    backgroundColor: Colors.bgCard,
+    borderBottomWidth: 1, borderColor: Colors.borderSubtle,
   },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  headerAvatar: {
-    width: 42, height: 42, borderRadius: 21,
-    alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#8a2be2', shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8, shadowRadius: 10, elevation: 8,
-  },
-  headerAvatarText: { color: '#fff', fontSize: 18, fontWeight: '900' },
-  headerTitle: { color: Colors.text, fontSize: Fonts.size.md, fontWeight: '800' },
-  headerStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
-  statusDot: { width: 7, height: 7, borderRadius: 4 },
-  headerStatus: { color: Colors.textSecondary, fontSize: Fonts.size.xs },
-  newChatBtn: { borderRadius: 20, overflow: 'hidden' },
-  newChatGrad: { paddingVertical: 7, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(138,43,226,0.35)' },
-  newChatText: { color: Colors.teal, fontSize: Fonts.size.xs, fontWeight: '700' },
+  backBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  backIcon: { color: Colors.text, fontSize: 20 },
+  headerTitle: { flex: 1, color: Colors.text, fontSize: Fonts.size.md, fontWeight: '600', textAlign: 'center', marginHorizontal: 12 },
+  headerNewBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  headerNewIcon: { fontSize: 18 },
 
   // Welcome
-  welcomeWrap: { alignItems: 'center', padding: 20, paddingTop: 30 },
-  welcomeAvatar: {
-    width: 90, height: 90, borderRadius: 45,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 16,
-    shadowColor: '#8a2be2', shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8, shadowRadius: 20, elevation: 14,
-  },
-  welcomeTitle: { color: Colors.text, fontSize: Fonts.size.xl, fontWeight: '800', marginBottom: 6 },
-  welcomeSub: { color: Colors.textSecondary, fontSize: Fonts.size.sm, marginBottom: 24, textAlign: 'center' },
-  promptGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'center' },
+  welcomeWrap: { padding: 24, alignItems: 'center', paddingTop: 48 },
+  welcomeLogoWrap: { marginBottom: 18 },
+  welcomeLogo: { width: 60, height: 60, borderRadius: 16, backgroundColor: Colors.accent, alignItems: 'center', justifyContent: 'center' },
+  welcomeLogoText: { color: '#fff', fontSize: 28, fontWeight: '900' },
+  welcomeTitle: { color: Colors.text, fontSize: Fonts.size.xl, fontWeight: '700', marginBottom: 24, textAlign: 'center' },
+  promptGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'center', width: '100%' },
   promptCard: {
-    width: (SCREEN_WIDTH - 56) / 2,
-    backgroundColor: Colors.bgCard, borderRadius: 16, padding: 14,
-    borderWidth: 1, borderColor: 'rgba(138,43,226,0.2)',
-    shadowColor: '#8a2be2', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15, shadowRadius: 8, elevation: 4,
+    width: (SW - 60) / 2, backgroundColor: Colors.bgCard, borderRadius: Radius.lg,
+    padding: 14, borderWidth: 1, borderColor: Colors.border,
   },
-  promptEmoji: { fontSize: 24, marginBottom: 8 },
-  promptTitle: { color: Colors.text, fontSize: Fonts.size.sm, fontWeight: '700', marginBottom: 4 },
+  promptEmoji: { fontSize: 22, marginBottom: 6 },
+  promptTitle: { color: Colors.text, fontSize: Fonts.size.sm, fontWeight: '600', marginBottom: 4 },
   promptSub: { color: Colors.textSecondary, fontSize: Fonts.size.xs, lineHeight: 16 },
 
   // Messages
-  list: { paddingHorizontal: 14, paddingVertical: 12, paddingBottom: 6 },
-  bubbleRow: { flexDirection: 'row', alignItems: 'flex-end', marginVertical: 5, maxWidth: '87%', gap: 8 },
-  bubbleRowUser: { alignSelf: 'flex-end', flexDirection: 'row-reverse' },
-  bubbleRowBot: { alignSelf: 'flex-start' },
-  botAvatar: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginBottom: 2 },
-  botAvatarText: { color: '#fff', fontSize: 14, fontWeight: '900' },
-  bubble: { borderRadius: 20, padding: 12, paddingHorizontal: 14, flexShrink: 1 },
-  bubbleUser: {
-    backgroundColor: '#8a2be2', borderBottomRightRadius: 5,
-    shadowColor: '#8a2be2', shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.4, shadowRadius: 8, elevation: 6,
-  },
-  bubbleBot: { backgroundColor: Colors.bgCard, borderBottomLeftRadius: 5, borderWidth: 1, borderColor: 'rgba(138,43,226,0.2)' },
-  bubbleError: { backgroundColor: 'rgba(239,68,68,0.1)', borderColor: 'rgba(239,68,68,0.3)' },
-  msgImage: { width: 200, height: 150, borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
-  bubbleTextUser: { color: Colors.white, fontSize: Fonts.size.md, lineHeight: 22 },
-  bubbleTextBot: { color: Colors.textSecondary, fontSize: Fonts.size.md, lineHeight: 22 },
-  timeText: { color: 'rgba(179,179,179,0.5)', fontSize: Fonts.size.xs, marginTop: 5 },
-  timeTextUser: { color: 'rgba(255,255,255,0.5)', textAlign: 'right' },
+  list: { paddingVertical: 16, paddingBottom: 6 },
 
-  // Code blocks
-  codeBlock: { backgroundColor: '#0d1117', borderRadius: 12, marginVertical: 6, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(138,43,226,0.3)' },
-  codeHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 7, backgroundColor: 'rgba(138,43,226,0.15)' },
-  codeLang: { color: Colors.teal, fontSize: Fonts.size.xs, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
-  codeCopy: { color: Colors.textSecondary, fontSize: Fonts.size.xs },
-  codeText: { fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', color: '#e6edf3', fontSize: 13, padding: 12, lineHeight: 20 },
-  inlineCode: { backgroundColor: 'rgba(138,43,226,0.15)', color: Colors.teal, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 13, borderRadius: 4, paddingHorizontal: 4 },
+  // User message — right-aligned pill
+  userRow: { alignItems: 'flex-end', paddingHorizontal: 16, marginVertical: 4 },
+  userBubble: {
+    backgroundColor: Colors.bgUserMsg, borderRadius: Radius.xl,
+    paddingVertical: 10, paddingHorizontal: 16,
+    maxWidth: SW * 0.78,
+  },
+  userText: { color: Colors.text, fontSize: Fonts.size.md, lineHeight: 22 },
+  msgImage: { width: 200, height: 150, borderRadius: 12, marginBottom: 8 },
+
+  // AI message — left-aligned, no bubble bg (ChatGPT style)
+  aiRow: { flexDirection: 'row', paddingHorizontal: 16, marginVertical: 6, alignItems: 'flex-start', gap: 12 },
+  aiAvatarWrap: { paddingTop: 2 },
+  aiAvatar: { width: 28, height: 28, borderRadius: 7, backgroundColor: Colors.accent, alignItems: 'center', justifyContent: 'center' },
+  aiAvatarText: { color: '#fff', fontSize: 13, fontWeight: '900' },
+  aiContent: { flex: 1 },
+  aiText: { color: Colors.text, fontSize: Fonts.size.md, lineHeight: 24 },
+  cursor: { color: Colors.accent, fontSize: 16 },
+  aiActions: { flexDirection: 'row', gap: 4, marginTop: 8 },
+  aiActionBtn: { padding: 6, borderRadius: 8 },
+  aiActionIcon: { fontSize: 14 },
+
+  // Code
+  codeBlock: { backgroundColor: '#0d1117', borderRadius: 10, marginVertical: 8, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  codeHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8, backgroundColor: 'rgba(255,255,255,0.05)' },
+  codeLang: { color: Colors.textSecondary, fontSize: Fonts.size.xs, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  codeCopy: { color: Colors.accent, fontSize: Fonts.size.xs },
+  codeText: { fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', color: '#e6edf3', fontSize: 13, padding: 14, lineHeight: 20 },
+  inlineCode: { backgroundColor: 'rgba(255,255,255,0.1)', color: Colors.text, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 13, borderRadius: 4, paddingHorizontal: 4 },
+
+  // Thinking
+  thinkDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.textSecondary },
 
   // FAB
   fab: { position: 'absolute', bottom: 80, right: 16 },
-  fabBtn: { borderRadius: 24 },
-  fabGrad: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', shadowColor: '#8a2be2', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.6, shadowRadius: 10, elevation: 8 },
-  fabIcon: { color: '#fff', fontSize: 20, fontWeight: '900' },
+  fabBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.bgCard, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.border },
+  fabIcon: { color: Colors.text, fontSize: 18 },
 
-  // Suggestion chips
-  chipsScroll: { maxHeight: 50 },
-  chipsRow: { paddingHorizontal: 14, paddingVertical: 8, gap: 8 },
-  chip: { backgroundColor: 'rgba(138,43,226,0.12)', borderRadius: 20, paddingVertical: 7, paddingHorizontal: 14, borderWidth: 1, borderColor: 'rgba(138,43,226,0.35)' },
-  chipText: { color: Colors.teal, fontSize: Fonts.size.xs, fontWeight: '600' },
+  // Chips
+  chipsRow: { paddingHorizontal: 16, paddingVertical: 8, gap: 8 },
+  chip: { backgroundColor: Colors.bgCard, borderRadius: Radius.full, paddingVertical: 7, paddingHorizontal: 14, borderWidth: 1, borderColor: Colors.border },
+  chipText: { color: Colors.textSecondary, fontSize: Fonts.size.xs },
 
-  // Image preview
-  imgPreviewRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingBottom: 6 },
-  previewImg: { width: 48, height: 48, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(138,43,226,0.4)' },
-  removeImgBtn: { width: 20, height: 20, borderRadius: 10, backgroundColor: Colors.error, alignItems: 'center', justifyContent: 'center' },
-  imgLabel: { color: Colors.textMuted, fontSize: Fonts.size.xs },
+  // Image
+  imgRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingBottom: 6 },
+  previewImg: { width: 48, height: 48, borderRadius: 10, borderWidth: 1, borderColor: Colors.border },
+  removeImg: { width: 20, height: 20, borderRadius: 10, backgroundColor: Colors.error, alignItems: 'center', justifyContent: 'center' },
 
-  // Input
-  inputBar: {
+  // Input — ChatGPT style rounded box
+  inputWrap: { paddingHorizontal: 16, paddingBottom: Platform.OS === 'ios' ? 28 : 14, paddingTop: 8 },
+  inputBox: {
     flexDirection: 'row', alignItems: 'flex-end',
-    paddingHorizontal: 12, paddingVertical: 10,
-    paddingBottom: Platform.OS === 'ios' ? 28 : 12,
-    borderTopWidth: 1, borderColor: 'rgba(138,43,226,0.2)',
-    backgroundColor: Colors.bgCard, gap: 10,
+    backgroundColor: Colors.bgInput, borderRadius: Radius.xl,
+    borderWidth: 1, borderColor: Colors.border,
+    paddingRight: 6, paddingLeft: 4, paddingVertical: 4,
+    minHeight: 52,
   },
-  attachBtn: { padding: 8 },
-  attachIcon: { fontSize: 22 },
-  inputWrap: { flex: 1, position: 'relative' },
+  inputLeft: { padding: 10 },
+  attachIcon: { fontSize: 20 },
   textInput: {
-    backgroundColor: Colors.bgInput, borderRadius: 24,
-    paddingHorizontal: 16, paddingVertical: 11, paddingBottom: 11,
-    color: Colors.text, fontSize: Fonts.size.md, maxHeight: 140,
-    borderWidth: 1, borderColor: 'rgba(138,43,226,0.25)',
+    flex: 1, color: Colors.text, fontSize: Fonts.size.md,
+    paddingVertical: 10, paddingHorizontal: 8, maxHeight: 160, lineHeight: 22,
   },
-  charCount: { position: 'absolute', bottom: 6, right: 12, color: Colors.textMuted, fontSize: 10 },
-  sendBtn: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
-  sendIcon: { color: Colors.white, fontSize: 22, fontWeight: '900' },
+  charCount: { color: Colors.textMuted, fontSize: 10, paddingBottom: 14, paddingRight: 4 },
+  sendBtn: {
+    width: 36, height: 36, borderRadius: 10,
+    backgroundColor: Colors.bgHover, alignItems: 'center', justifyContent: 'center', marginBottom: 2,
+  },
+  sendBtnActive: { backgroundColor: Colors.accent },
+  sendIcon: { color: Colors.white, fontSize: 18, fontWeight: '900' },
+  disclaimer: { color: Colors.textMuted, fontSize: 10, textAlign: 'center', marginTop: 8 },
 });
