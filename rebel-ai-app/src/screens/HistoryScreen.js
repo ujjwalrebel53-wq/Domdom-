@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, StatusBar,
+  View, Text, FlatList, TouchableOpacity, StyleSheet,
+  Alert, StatusBar, TextInput, Share, Clipboard,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import LinearGradient from 'react-native-linear-gradient';
@@ -9,16 +10,41 @@ import { getChatHistory, clearChatHistory, getCurrentUser } from '../utils/stora
 
 export default function HistoryScreen() {
   const [history, setHistory] = useState([]);
+  const [filtered, setFiltered] = useState([]);
   const [user, setUser] = useState(null);
+  const [search, setSearch] = useState('');
+  const [activeFilter, setActiveFilter] = useState('all');
 
   useFocusEffect(useCallback(() => {
     (async () => {
       const cu = await getCurrentUser();
       setUser(cu);
       const h = await getChatHistory(cu?.email || 'guest');
-      setHistory(h.slice().reverse());
+      const rev = h.slice().reverse();
+      setHistory(rev);
+      setFiltered(rev);
     })();
   }, []));
+
+  function applyFilter(text, filter) {
+    let base = history;
+    if (filter === 'user') base = history.filter(m => m.role === 'user');
+    else if (filter === 'ai') base = history.filter(m => m.role === 'assistant');
+    if (text.trim()) {
+      base = base.filter(m => m.content?.toLowerCase().includes(text.toLowerCase()));
+    }
+    setFiltered(base);
+  }
+
+  function onSearch(text) {
+    setSearch(text);
+    applyFilter(text, activeFilter);
+  }
+
+  function setFilter(f) {
+    setActiveFilter(f);
+    applyFilter(search, f);
+  }
 
   function confirmClear() {
     Alert.alert('Clear History', 'All messages will be permanently deleted.', [
@@ -26,66 +52,120 @@ export default function HistoryScreen() {
       {
         text: 'Delete All', style: 'destructive', onPress: async () => {
           await clearChatHistory(user?.email || 'guest');
-          setHistory([]);
+          setHistory([]); setFiltered([]);
         },
       },
     ]);
   }
 
+  function handleLongPress(item) {
+    Alert.alert('Message Options', '', [
+      { text: '📋 Copy', onPress: () => Clipboard.setString(item.content) },
+      { text: '🔗 Share', onPress: () => Share.share({ message: item.content }) },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }
+
   function formatTime(ts) {
     if (!ts) return '';
-    return new Date(ts).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+    return new Date(ts).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' });
   }
+
+  const FILTERS = [
+    { key: 'all', label: 'All' },
+    { key: 'user', label: 'Mine' },
+    { key: 'ai', label: 'AI' },
+  ];
 
   return (
     <View style={styles.root}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.bg} />
 
-      {/* Header with gradient border bottom */}
+      {/* Header */}
       <View style={styles.headerWrap}>
         <View style={styles.header}>
           <View>
             <Text style={styles.title}>Chat <Text style={{ color: Colors.teal }}>History</Text></Text>
-            <Text style={styles.subtitle}>{history.length} message{history.length !== 1 ? 's' : ''}</Text>
+            <Text style={styles.subtitle}>{filtered.length} of {history.length} messages</Text>
           </View>
           {history.length > 0 && (
             <TouchableOpacity onPress={confirmClear} style={styles.clearBtn} activeOpacity={0.75}>
-              <Text style={styles.clearTxt}>Clear All</Text>
+              <Text style={styles.clearTxt}>🗑 Clear</Text>
             </TouchableOpacity>
           )}
         </View>
         <LinearGradient colors={['#8a2be2', '#00ced1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.headerLine} />
       </View>
 
-      {history.length === 0 ? (
-        <View style={styles.empty}>
-          <View style={styles.emptyIconWrap}>
-            <LinearGradient colors={['#8a2be2', '#00ced1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.emptyIconCircle}>
-              <Text style={{ fontSize: 30 }}>💬</Text>
-            </LinearGradient>
+      {/* Search bar */}
+      {history.length > 0 && (
+        <View style={styles.searchRow}>
+          <View style={styles.searchWrap}>
+            <Text style={styles.searchIcon}>🔍</Text>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search messages..."
+              placeholderTextColor={Colors.textMuted}
+              value={search}
+              onChangeText={onSearch}
+            />
+            {!!search && (
+              <TouchableOpacity onPress={() => onSearch('')}>
+                <Text style={styles.clearSearch}>✕</Text>
+              </TouchableOpacity>
+            )}
           </View>
-          <Text style={styles.emptyTitle}>No messages yet</Text>
-          <Text style={styles.emptySub}>Start chatting with Rebel Gpt to see history here</Text>
+          {/* Filter chips */}
+          <View style={styles.filterRow}>
+            {FILTERS.map(f => (
+              <TouchableOpacity key={f.key} onPress={() => setFilter(f.key)} activeOpacity={0.8}>
+                {activeFilter === f.key ? (
+                  <LinearGradient colors={['#8a2be2', '#00ced1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.filterChipActive}>
+                    <Text style={styles.filterChipTextActive}>{f.label}</Text>
+                  </LinearGradient>
+                ) : (
+                  <View style={styles.filterChip}>
+                    <Text style={styles.filterChipText}>{f.label}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      )}
+
+      {filtered.length === 0 ? (
+        <View style={styles.empty}>
+          <LinearGradient colors={['#8a2be2', '#00ced1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.emptyCircle}>
+            <Text style={{ fontSize: 28 }}>{search ? '🔍' : '💬'}</Text>
+          </LinearGradient>
+          <Text style={styles.emptyTitle}>{search ? 'No results found' : 'No messages yet'}</Text>
+          <Text style={styles.emptySub}>{search ? 'Try a different keyword' : 'Start chatting with Rebel Gpt!'}</Text>
         </View>
       ) : (
         <FlatList
-          data={history}
+          data={filtered}
           keyExtractor={(_, i) => i.toString()}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
           renderItem={({ item }) => (
-            <View style={[styles.item, item.role === 'user' ? styles.itemUser : styles.itemBot]}>
-              <View style={styles.itemHeader}>
-                <View style={styles.roleRow}>
-                  <View style={[styles.roleDot, { backgroundColor: item.role === 'user' ? Colors.purple : Colors.teal }]} />
-                  <Text style={[styles.itemRole, { color: item.role === 'user' ? Colors.purple : Colors.teal }]}>
-                    {item.role === 'user' ? 'You' : 'Rebel Gpt'}
-                  </Text>
+            <TouchableOpacity
+              onLongPress={() => handleLongPress(item)}
+              activeOpacity={0.88}
+            >
+              <View style={[styles.item, item.role === 'user' ? styles.itemUser : styles.itemBot]}>
+                <View style={styles.itemHeader}>
+                  <View style={styles.roleRow}>
+                    <View style={[styles.roleDot, { backgroundColor: item.role === 'user' ? Colors.purple : Colors.teal }]} />
+                    <Text style={[styles.itemRole, { color: item.role === 'user' ? Colors.purple : Colors.teal }]}>
+                      {item.role === 'user' ? 'You' : 'Rebel Gpt'}
+                    </Text>
+                  </View>
+                  {item.ts && <Text style={styles.itemTime}>{formatTime(item.ts)}</Text>}
                 </View>
-                {item.ts && <Text style={styles.itemTime}>{formatTime(item.ts)}</Text>}
+                <Text style={styles.itemContent} numberOfLines={3}>{item.content}</Text>
               </View>
-              <Text style={styles.itemContent} numberOfLines={3}>{item.content}</Text>
-            </View>
+            </TouchableOpacity>
           )}
         />
       )}
@@ -109,7 +189,26 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)',
   },
   clearTxt: { color: Colors.error, fontSize: Fonts.size.sm, fontWeight: '600' },
-  list: { padding: 16, gap: 10 },
+
+  searchRow: { padding: 14, gap: 10, backgroundColor: Colors.bgCard, borderBottomWidth: 1, borderColor: 'rgba(138,43,226,0.15)' },
+  searchWrap: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: Colors.bgInput, borderRadius: 14, paddingHorizontal: 12,
+    borderWidth: 1, borderColor: 'rgba(138,43,226,0.2)',
+  },
+  searchIcon: { fontSize: 15, marginRight: 8 },
+  searchInput: { flex: 1, color: Colors.text, fontSize: Fonts.size.sm, paddingVertical: 10 },
+  clearSearch: { color: Colors.textMuted, fontSize: 14, paddingHorizontal: 4 },
+  filterRow: { flexDirection: 'row', gap: 8 },
+  filterChip: {
+    paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20,
+    backgroundColor: Colors.bgInput, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+  },
+  filterChipActive: { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20 },
+  filterChipText: { color: Colors.textSecondary, fontSize: Fonts.size.xs, fontWeight: '600' },
+  filterChipTextActive: { color: '#fff', fontSize: Fonts.size.xs, fontWeight: '700' },
+
+  list: { padding: 14, gap: 10 },
   item: { borderRadius: 14, padding: 14, borderWidth: 1, borderColor: 'rgba(138,43,226,0.15)' },
   itemUser: { backgroundColor: 'rgba(138,43,226,0.08)' },
   itemBot: { backgroundColor: Colors.bgCard },
@@ -120,8 +219,7 @@ const styles = StyleSheet.create({
   itemTime: { color: Colors.textMuted, fontSize: Fonts.size.xs },
   itemContent: { color: Colors.textSecondary, fontSize: Fonts.size.sm, lineHeight: 19 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14, padding: 40 },
-  emptyIconWrap: { marginBottom: 4 },
-  emptyIconCircle: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center' },
+  emptyCircle: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center' },
   emptyTitle: { color: Colors.text, fontSize: Fonts.size.lg, fontWeight: '700' },
-  emptySub: { color: Colors.textSecondary, fontSize: Fonts.size.sm, textAlign: 'center', lineHeight: 20 },
+  emptySub: { color: Colors.textSecondary, fontSize: Fonts.size.sm, textAlign: 'center' },
 });
