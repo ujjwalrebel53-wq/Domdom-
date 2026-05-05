@@ -1,14 +1,26 @@
-// ChatGPT-style settings
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, Switch, TouchableOpacity, StyleSheet,
   ScrollView, Alert, StatusBar, Linking,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import LinearGradient from 'react-native-linear-gradient';
 import { Colors, Fonts, Radius } from '../theme';
 import { getCurrentUser, getSettings, saveSettings, logoutUser } from '../utils/storage';
 import { getStats } from '../utils/stats';
-import { deleteAllConversations } from '../utils/conversations';
+
+function MiniBar({ value, max, color }) {
+  const pct = Math.min((value / Math.max(max, 1)) * 100, 100);
+  return (
+    <View style={{ height: 5, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 3, overflow: 'hidden', marginTop: 4 }}>
+      <LinearGradient
+        colors={[Colors.purple, Colors.teal]}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+        style={{ width: `${pct}%`, height: '100%', borderRadius: 3 }}
+      />
+    </View>
+  );
+}
 
 export default function SettingsScreen({ navigation }) {
   const [user, setUser] = useState(null);
@@ -24,31 +36,41 @@ export default function SettingsScreen({ navigation }) {
 
   async function update(key, val) {
     const updated = { ...settings, [key]: val };
-    setSettings(updated); await saveSettings(updated);
+    setSettings(updated);
+    await saveSettings(updated);
+  }
+
+  async function handleLogout() {
+    Alert.alert('Sign Out', 'Are you sure?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign Out', style: 'destructive', onPress: async () => {
+          await logoutUser();
+          navigation.replace('Auth');
+        },
+      },
+    ]);
   }
 
   function Section({ title, children }) {
     return (
       <View style={styles.section}>
-        {title && <Text style={styles.sectionTitle}>{title}</Text>}
+        <Text style={styles.sectionTitle}>{title}</Text>
         <View style={styles.sectionCard}>{children}</View>
       </View>
     );
   }
 
-  function Row({ label, icon, value, children, noBorder, onPress, destructive }) {
-    const content = (
+  function Row({ label, value, children, noBorder, icon }) {
+    return (
       <View style={[styles.row, noBorder && { borderBottomWidth: 0 }]}>
-        {icon && <Text style={styles.rowIcon}>{icon}</Text>}
-        <Text style={[styles.rowLabel, destructive && { color: Colors.error }]}>{label}</Text>
-        <View style={{ flex: 1 }} />
+        <View style={styles.rowLeft}>
+          {icon && <Text style={styles.rowIcon}>{icon}</Text>}
+          <Text style={styles.rowLabel}>{label}</Text>
+        </View>
         {children || (value !== undefined && <Text style={styles.rowValue}>{value}</Text>)}
-        {onPress && !children && <Text style={styles.rowChevron}>›</Text>}
       </View>
     );
-    return onPress
-      ? <TouchableOpacity onPress={onPress} activeOpacity={0.7}>{content}</TouchableOpacity>
-      : content;
   }
 
   const maxDay = stats ? Math.max(...(stats.last7?.map(d => d.count) || [1]), 1) : 1;
@@ -56,54 +78,80 @@ export default function SettingsScreen({ navigation }) {
   return (
     <View style={styles.root}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.bg} />
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Text style={styles.backIcon}>‹</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>Settings</Text>
-        <View style={{ width: 30 }} />
+
+      <View style={styles.headerWrap}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Settings</Text>
+        </View>
+        <LinearGradient colors={['#8a2be2', '#00ced1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.headerLine} />
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+
         {/* User card */}
         {user && (
           <View style={styles.userCard}>
-            <View style={styles.userAvatar}>
-              <Text style={styles.userAvatarText}>{user.name?.[0]?.toUpperCase()}</Text>
-            </View>
+            <LinearGradient colors={['#8a2be2', '#00ced1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.userAvatar}>
+              <Text style={styles.userAvatarText}>{user.name?.[0]?.toUpperCase() || 'U'}</Text>
+            </LinearGradient>
             <View style={styles.userInfo}>
               <Text style={styles.userName}>{user.name}</Text>
               <Text style={styles.userEmail}>{user.email}</Text>
+              <LinearGradient colors={['#8a2be2', '#00ced1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.badge}>
+                <Text style={styles.badgeText}>✦ Rebel AI Member</Text>
+              </LinearGradient>
             </View>
           </View>
         )}
 
-        {/* Stats */}
+        {/* Usage stats */}
         {stats && (
-          <Section title="Usage">
-            <View style={styles.statsRow}>
-              {[
-                { label: 'Messages', value: stats.totalMessages },
-                { label: 'Today', value: stats.todayCount },
-                { label: 'Sessions', value: stats.totalSessions },
-              ].map((s, i) => (
-                <View key={i} style={[styles.statBox, i > 0 && { borderLeftWidth: 1, borderLeftColor: Colors.borderSubtle }]}>
-                  <Text style={styles.statNum}>{s.value}</Text>
-                  <Text style={styles.statLabel}>{s.label}</Text>
+          <Section title="📊  USAGE STATS">
+            <View style={styles.statsGrid}>
+              <View style={styles.statBox}>
+                <LinearGradient colors={['rgba(138,43,226,0.15)', 'rgba(0,206,209,0.08)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.statGrad}>
+                  <Text style={styles.statNum}>{stats.totalMessages}</Text>
+                  <Text style={styles.statLabel}>Total Messages</Text>
+                </LinearGradient>
+              </View>
+              <View style={styles.statBox}>
+                <LinearGradient colors={['rgba(138,43,226,0.15)', 'rgba(0,206,209,0.08)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.statGrad}>
+                  <Text style={styles.statNum}>{stats.todayCount}</Text>
+                  <Text style={styles.statLabel}>Today</Text>
+                </LinearGradient>
+              </View>
+              <View style={styles.statBox}>
+                <LinearGradient colors={['rgba(138,43,226,0.15)', 'rgba(0,206,209,0.08)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.statGrad}>
+                  <Text style={styles.statNum}>{stats.totalSessions}</Text>
+                  <Text style={styles.statLabel}>Sessions</Text>
+                </LinearGradient>
+              </View>
+              {stats.firstUsed && (
+                <View style={styles.statBox}>
+                  <LinearGradient colors={['rgba(138,43,226,0.15)', 'rgba(0,206,209,0.08)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.statGrad}>
+                    <Text style={[styles.statNum, { fontSize: Fonts.size.sm }]}>{stats.firstUsed}</Text>
+                    <Text style={styles.statLabel}>First Used</Text>
+                  </LinearGradient>
                 </View>
-              ))}
+              )}
             </View>
+
+            {/* 7-day chart */}
             {stats.last7 && (
-              <View style={styles.chart}>
+              <View style={styles.chartWrap}>
                 <Text style={styles.chartTitle}>Last 7 Days</Text>
                 <View style={styles.chartBars}>
                   {stats.last7.map((d, i) => {
-                    const h = Math.max((d.count / maxDay) * 52, d.count > 0 ? 6 : 2);
+                    const h = Math.max((d.count / maxDay) * 56, d.count > 0 ? 8 : 3);
                     return (
-                      <View key={i} style={styles.barWrap}>
-                        <Text style={styles.barCount}>{d.count > 0 ? d.count : ''}</Text>
-                        <View style={[styles.bar, { height: h, backgroundColor: d.count > 0 ? Colors.accent : Colors.bgHover }]} />
-                        <Text style={styles.barLabel}>{d.label}</Text>
+                      <View key={i} style={styles.chartBarWrap}>
+                        <Text style={styles.chartCount}>{d.count > 0 ? d.count : ''}</Text>
+                        {d.count > 0 ? (
+                          <LinearGradient colors={['#8a2be2', '#00ced1']} start={{ x: 0, y: 1 }} end={{ x: 0, y: 0 }} style={[styles.chartBar, { height: h }]} />
+                        ) : (
+                          <View style={[styles.chartBarEmpty, { height: 3 }]} />
+                        )}
+                        <Text style={styles.chartLabel}>{d.label}</Text>
                       </View>
                     );
                   })}
@@ -114,47 +162,52 @@ export default function SettingsScreen({ navigation }) {
         )}
 
         {/* Preferences */}
-        <Section title="Preferences">
-          <Row label="Haptic feedback" icon="📳">
-            <Switch value={settings.haptics !== false} onValueChange={v => update('haptics', v)} trackColor={{ false: Colors.bgHover, true: Colors.accent }} thumbColor="#fff" />
+        <Section title="⚙️  PREFERENCES">
+          <Row label="Haptic Feedback" icon="📳">
+            <Switch
+              value={settings.haptics !== false}
+              onValueChange={v => update('haptics', v)}
+              trackColor={{ false: Colors.bgInput, true: Colors.purple }}
+              thumbColor={Colors.white}
+            />
           </Row>
-          <Row label="Sound effects" icon="🔔" noBorder>
-            <Switch value={settings.sound !== false} onValueChange={v => update('sound', v)} trackColor={{ false: Colors.bgHover, true: Colors.accent }} thumbColor="#fff" />
+          <Row label="Sound Effects" icon="🔔" noBorder>
+            <Switch
+              value={settings.sound !== false}
+              onValueChange={v => update('sound', v)}
+              trackColor={{ false: Colors.bgInput, true: Colors.purple }}
+              thumbColor={Colors.white}
+            />
           </Row>
         </Section>
 
-        {/* Data */}
-        <Section title="Data controls">
-          <Row label="Delete all conversations" icon="🗑" destructive noBorder onPress={() => {
-            Alert.alert('Delete All', 'This will permanently delete all your conversations.', [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Delete all', style: 'destructive', onPress: async () => { await deleteAllConversations(); } },
-            ]);
-          }} />
-        </Section>
-
-        {/* About */}
-        <Section title="About">
+        {/* App info */}
+        <Section title="ℹ️  ABOUT">
           <Row label="Version" icon="🚀" value="1.0.0" />
-          <Row label="Built by" icon="👨‍💻" value="Rebel Bhaiya" />
-          <Row label="Website" icon="🌐" noBorder onPress={() => Linking.openURL('https://ujjwalrebel53-wq.github.io/Domdom-/')}>
-            <Text style={styles.linkText}>Open ›</Text>
+          <Row label="Built by" icon="👨‍💻" value="Rebel Bhaiya" noBorder />
+        </Section>
+
+        {/* Links */}
+        <Section title="🌐  CONNECT">
+          <Row label="Visit Website" icon="🌍" noBorder>
+            <TouchableOpacity onPress={() => Linking.openURL('https://ujjwalrebel53-wq.github.io/Domdom-/')} activeOpacity={0.7}>
+              <Text style={styles.linkText}>Open →</Text>
+            </TouchableOpacity>
           </Row>
         </Section>
 
-        {/* Sign out */}
         {user && (
-          <Section>
-            <Row label="Sign out" icon="🚪" noBorder destructive onPress={() => {
-              Alert.alert('Sign Out', '', [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Sign out', style: 'destructive', onPress: async () => { await logoutUser(); navigation.replace('Auth'); } },
-              ]);
-            }} />
-          </Section>
+          <TouchableOpacity onPress={handleLogout} activeOpacity={0.82} style={{ marginTop: 4 }}>
+            <View style={styles.logoutBtn}>
+              <Text style={styles.logoutText}>Sign Out</Text>
+            </View>
+          </TouchableOpacity>
         )}
 
-        <Text style={styles.footer}>Rebel AI — Unleash the Code.</Text>
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>Rebel AI — Unleash the Code.</Text>
+          <Text style={styles.footerSub}>100% Free · No subscriptions</Text>
+        </View>
       </ScrollView>
     </View>
   );
@@ -162,41 +215,65 @@ export default function SettingsScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.bg },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 14, paddingBottom: 10, borderBottomWidth: 1, borderColor: Colors.borderSubtle },
-  backIcon: { color: Colors.text, fontSize: 28, fontWeight: '300' },
-  title: { color: Colors.text, fontSize: Fonts.size.lg, fontWeight: '700' },
+  headerWrap: { backgroundColor: Colors.bgCard },
+  header: { paddingHorizontal: 18, paddingTop: 16, paddingBottom: 14 },
+  headerLine: { height: 2 },
+  title: { color: Colors.text, fontSize: Fonts.size.xl, fontWeight: '800' },
   scroll: { flex: 1 },
-  content: { padding: 16, paddingBottom: 50, gap: 24 },
+  content: { padding: 18, paddingBottom: 50, gap: 20 },
 
-  userCard: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: Colors.bgCard, borderRadius: Radius.lg, padding: 16, borderWidth: 1, borderColor: Colors.border },
-  userAvatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: Colors.accent, alignItems: 'center', justifyContent: 'center' },
-  userAvatarText: { color: '#fff', fontSize: 20, fontWeight: '900' },
-  userInfo: { flex: 1 },
-  userName: { color: Colors.text, fontSize: Fonts.size.md, fontWeight: '600' },
-  userEmail: { color: Colors.textSecondary, fontSize: Fonts.size.sm, marginTop: 2 },
+  userCard: {
+    flexDirection: 'row', gap: 16, alignItems: 'center',
+    backgroundColor: Colors.bgCard, borderRadius: 20, padding: 18,
+    borderWidth: 1, borderColor: 'rgba(138,43,226,0.3)',
+    shadowColor: '#8a2be2', shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.2, shadowRadius: 16, elevation: 6,
+  },
+  userAvatar: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center' },
+  userAvatarText: { color: '#fff', fontSize: 26, fontWeight: '900' },
+  userInfo: { flex: 1, gap: 3 },
+  userName: { color: Colors.text, fontSize: Fonts.size.md, fontWeight: '700' },
+  userEmail: { color: Colors.textSecondary, fontSize: Fonts.size.sm },
+  badge: { borderRadius: 20, paddingVertical: 4, paddingHorizontal: 12, alignSelf: 'flex-start', marginTop: 5 },
+  badgeText: { color: '#fff', fontSize: Fonts.size.xs, fontWeight: '700' },
 
-  statsRow: { flexDirection: 'row' },
-  statBox: { flex: 1, alignItems: 'center', padding: 16 },
-  statNum: { color: Colors.text, fontSize: Fonts.size.xl, fontWeight: '800' },
+  // Stats
+  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, padding: 14, paddingBottom: 0 },
+  statBox: { flex: 1, minWidth: '44%', borderRadius: 14, overflow: 'hidden' },
+  statGrad: { padding: 14, alignItems: 'center', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(138,43,226,0.2)' },
+  statNum: { color: Colors.text, fontSize: Fonts.size.xl, fontWeight: '900' },
   statLabel: { color: Colors.textMuted, fontSize: Fonts.size.xs, marginTop: 3 },
 
-  chart: { padding: 16, paddingTop: 4 },
-  chartTitle: { color: Colors.textMuted, fontSize: Fonts.size.xs, marginBottom: 10 },
-  chartBars: { flexDirection: 'row', alignItems: 'flex-end', gap: 6, height: 70 },
-  barWrap: { flex: 1, alignItems: 'center', gap: 4 },
-  barCount: { color: Colors.textMuted, fontSize: 9 },
-  bar: { width: '100%', borderRadius: 4 },
-  barLabel: { color: Colors.textMuted, fontSize: 9 },
+  chartWrap: { padding: 14, paddingTop: 10 },
+  chartTitle: { color: Colors.textSecondary, fontSize: Fonts.size.xs, fontWeight: '700', marginBottom: 10, letterSpacing: 0.5 },
+  chartBars: { flexDirection: 'row', alignItems: 'flex-end', gap: 6, height: 80 },
+  chartBarWrap: { flex: 1, alignItems: 'center', gap: 4 },
+  chartCount: { color: Colors.textMuted, fontSize: 9 },
+  chartBar: { width: '100%', borderRadius: 4 },
+  chartBarEmpty: { width: '100%', backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 3 },
+  chartLabel: { color: Colors.textMuted, fontSize: 9, marginTop: 2 },
 
-  section: { gap: 6 },
-  sectionTitle: { color: Colors.textMuted, fontSize: Fonts.size.xs, fontWeight: '600', paddingHorizontal: 4, letterSpacing: 0.3 },
-  sectionCard: { backgroundColor: Colors.bgCard, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden' },
-  row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderColor: Colors.borderSubtle, gap: 12 },
-  rowIcon: { fontSize: 17, width: 24 },
+  section: { gap: 8 },
+  sectionTitle: { color: Colors.textMuted, fontSize: Fonts.size.xs, fontWeight: '700', letterSpacing: 2, paddingHorizontal: 4 },
+  sectionCard: { backgroundColor: Colors.bgCard, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', overflow: 'hidden' },
+  row: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 18, paddingVertical: 15,
+    borderBottomWidth: 1, borderColor: 'rgba(255,255,255,0.05)',
+  },
+  rowLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  rowIcon: { fontSize: 16 },
   rowLabel: { color: Colors.text, fontSize: Fonts.size.md },
   rowValue: { color: Colors.textSecondary, fontSize: Fonts.size.sm },
-  rowChevron: { color: Colors.textMuted, fontSize: 20 },
-  linkText: { color: Colors.accent, fontSize: Fonts.size.sm },
+  linkText: { color: Colors.teal, fontSize: Fonts.size.sm, fontWeight: '600' },
 
-  footer: { color: Colors.textMuted, fontSize: Fonts.size.xs, textAlign: 'center', marginTop: 8 },
+  logoutBtn: {
+    borderWidth: 1, borderColor: 'rgba(239,68,68,0.35)',
+    borderRadius: Radius.full, paddingVertical: 14, alignItems: 'center',
+    backgroundColor: 'rgba(239,68,68,0.08)',
+  },
+  logoutText: { color: Colors.error, fontWeight: '700', fontSize: Fonts.size.md },
+  footer: { alignItems: 'center', gap: 4, paddingTop: 10 },
+  footerText: { color: Colors.textMuted, fontSize: Fonts.size.xs, letterSpacing: 1 },
+  footerSub: { color: Colors.textMuted, fontSize: Fonts.size.xs },
 });
