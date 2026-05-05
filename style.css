@@ -3254,38 +3254,24 @@ select.admin-config-input option {
 #loginSubtitle { transition: color 0.4s ease; }
 
 /* ═══════════════════════════════════════════════════════════════
-   CODESPACE NAV BUTTON  (Cursor-style, Rebel AI themed)
+   CODESPACE HERO BUTTON  (Cursor-style, Rebel AI themed)
+   — sits next to "Access Rebel Ai" in the hero-buttons row
 ════════════════════════════════════════════════════════════════ */
-.codespace-nav-btn {
+.btn-codespace {
   position: relative;
-  display: inline-flex;
-  align-items: center;
-  margin-left: 24px;
-  padding: 0;
-  border-radius: 9px;
   overflow: hidden;
-  text-decoration: none;
-}
-
-.codespace-btn-inner {
-  position: relative;
-  z-index: 1;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 7px 16px;
   background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(138, 43, 226, 0.45);
-  border-radius: 9px;
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 0.82rem;
+  border: 1.5px solid rgba(138, 43, 226, 0.55);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.95rem;
   font-weight: 600;
   letter-spacing: 0.2px;
-  transition: background 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease;
+  box-shadow: 0 4px 18px rgba(138, 43, 226, 0.18);
+  transition: background 0.25s ease, border-color 0.25s ease,
+              color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
 }
 
-.codespace-btn-inner i {
-  font-size: 0.78rem;
+.btn-codespace i {
   background: var(--gradient-bg);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -3293,34 +3279,40 @@ select.admin-config-input option {
   transition: filter 0.25s ease;
 }
 
-/* Shimmer sweep — identical to cursor.com CTA hover effect */
+/* Shimmer sweep on hover — Cursor.com style */
 .codespace-btn-shimmer {
   position: absolute;
   inset: 0;
-  border-radius: 9px;
-  background: linear-gradient(105deg, transparent 40%, rgba(138,43,226,0.18) 50%, transparent 60%);
+  border-radius: 50px;
+  background: linear-gradient(
+    105deg,
+    transparent 35%,
+    rgba(138, 43, 226, 0.22) 50%,
+    transparent 65%
+  );
   background-size: 200% 100%;
   background-position: 200% 0;
   transition: background-position 0.55s ease;
   pointer-events: none;
 }
 
-.codespace-nav-btn:hover .codespace-btn-shimmer {
+.btn-codespace:hover .codespace-btn-shimmer {
   background-position: -200% 0;
 }
 
-.codespace-nav-btn:hover .codespace-btn-inner {
-  background: rgba(138, 43, 226, 0.12);
-  border-color: rgba(138, 43, 226, 0.75);
+.btn-codespace:hover {
+  background: rgba(138, 43, 226, 0.14);
+  border-color: rgba(138, 43, 226, 0.85);
   color: #fff;
-  box-shadow: 0 0 16px rgba(138, 43, 226, 0.35), 0 2px 8px rgba(0, 0, 0, 0.4);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 28px rgba(138, 43, 226, 0.42), 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
-.codespace-nav-btn:hover .codespace-btn-inner i {
-  filter: drop-shadow(0 0 6px rgba(138,43,226,0.7));
+.btn-codespace:hover i {
+  filter: drop-shadow(0 0 7px rgba(138, 43, 226, 0.75));
 }
 
-.codespace-nav-btn::after {
+.btn-codespace::after {
   display: none;
 }
 
