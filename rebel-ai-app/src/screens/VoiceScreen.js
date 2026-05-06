@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Speech from 'expo-speech';
 import * as Haptics from 'expo-haptics';
 import LinearGradient from 'react-native-linear-gradient';
+import { DrawerContext } from '../navigation';
 import { Colors, Fonts, Radius } from '../theme';
 import { getVaHistory, saveVaHistory, getVaMemory, saveVaMemory } from '../utils/storage';
 import { sendVoiceMessage, extractMemory, cleanForSpeech } from '../utils/api';
@@ -15,6 +16,7 @@ const STATES = { idle: 'idle', listening: 'listening', thinking: 'thinking', spe
 
 export default function VoiceScreen() {
   const insets = useSafeAreaInsets();
+  const drawer = React.useContext(DrawerContext);
   const [state, setState] = useState(STATES.idle);
   const [transcript, setTranscript] = useState('');
   const [reply, setReply] = useState('');
@@ -211,8 +213,14 @@ export default function VoiceScreen() {
 
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <Text style={styles.headerTitle}>REBEL <Text style={{ color: Colors.teal }}>AI</Text></Text>
-        <Text style={styles.headerSub}>NEURAL INTERFACE</Text>
+        <TouchableOpacity onPress={() => drawer.open()} style={styles.hamBtn} activeOpacity={0.7} hitSlop={{ top:10,bottom:10,left:10,right:10 }}>
+          <View style={styles.hamLine} /><View style={[styles.hamLine,{width:18}]} /><View style={styles.hamLine} />
+        </TouchableOpacity>
+        <View style={{ alignItems: 'center', flex: 1 }}>
+          <Text style={styles.headerTitle}>REBEL <Text style={{ color: Colors.teal }}>AI</Text></Text>
+          <Text style={styles.headerSub}>NEURAL INTERFACE</Text>
+        </View>
+        <View style={{ width: 34 }} />{/* spacer to center title */}
       </View>
 
       {/* Avatar section */}
@@ -319,7 +327,9 @@ export default function VoiceScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.bg },
-  header: { alignItems: 'center', paddingTop: Platform.OS === 'android' ? 18 : 14, paddingBottom: 8 },
+  header: { flexDirection: 'row', alignItems: 'center', paddingTop: 8, paddingBottom: 8, paddingHorizontal: 14 },
+  hamBtn: { padding: 4, gap: 5, justifyContent: 'center' },
+  hamLine: { width: 22, height: 2.5, backgroundColor: Colors.text, borderRadius: 2 },
   headerTitle: { color: Colors.text, fontSize: Fonts.size.xl, fontWeight: '900', letterSpacing: 5 },
   headerSub: { color: Colors.textMuted, fontSize: Fonts.size.xs, letterSpacing: 4, marginTop: 4 },
 

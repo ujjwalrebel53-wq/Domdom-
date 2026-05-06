@@ -6,6 +6,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
+import { DrawerContext } from '../navigation';
 import { Colors, Fonts, Radius } from '../theme';
 import { getCurrentUser, getSettings, saveSettings, logoutUser } from '../utils/storage';
 import { getStats } from '../utils/stats';
@@ -25,6 +26,7 @@ function MiniBar({ value, max, color }) {
 
 export default function SettingsScreen({ navigation }) {
   const insets = useSafeAreaInsets();
+  const drawer = React.useContext(DrawerContext);
   const [user, setUser] = useState(null);
   const [settings, setSettings] = useState({ haptics: true, sound: true });
   const [stats, setStats] = useState(null);
@@ -83,7 +85,10 @@ export default function SettingsScreen({ navigation }) {
 
       <View style={[styles.headerWrap, { paddingTop: insets.top }]}>
         <View style={styles.header}>
-          <Text style={styles.title}>Settings</Text>
+          <TouchableOpacity onPress={() => drawer.open()} style={styles.hamBtn} activeOpacity={0.7} hitSlop={{ top:10,bottom:10,left:10,right:10 }}>
+            <View style={styles.hamLine} /><View style={[styles.hamLine,{width:18}]} /><View style={styles.hamLine} />
+          </TouchableOpacity>
+          <Text style={[styles.title, { marginLeft: 12 }]}>Settings</Text>
         </View>
         <LinearGradient colors={['#8a2be2', '#00ced1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.headerLine} />
       </View>
@@ -218,7 +223,9 @@ export default function SettingsScreen({ navigation }) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.bg },
   headerWrap: { backgroundColor: Colors.bgCard },
-  header: { paddingHorizontal: 18, paddingTop: 16, paddingBottom: 14 },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingTop: 14, paddingBottom: 14 },
+  hamBtn: { padding: 4, gap: 5, justifyContent: 'center' },
+  hamLine: { width: 22, height: 2.5, backgroundColor: Colors.text, borderRadius: 2 },
   headerLine: { height: 2 },
   title: { color: Colors.text, fontSize: Fonts.size.xl, fontWeight: '800' },
   scroll: { flex: 1 },

@@ -1,82 +1,164 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import {
+  View, Text, StyleSheet, TouchableOpacity,
+  Animated, Dimensions, Platform,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
 
-import SplashScreen from '../screens/SplashScreen';
-import AuthScreen from '../screens/AuthScreen';
-import ChatScreen from '../screens/ChatScreen';
-import VoiceScreen from '../screens/VoiceScreen';
-import HistoryScreen from '../screens/HistoryScreen';
+import SplashScreen   from '../screens/SplashScreen';
+import AuthScreen     from '../screens/AuthScreen';
+import ChatScreen     from '../screens/ChatScreen';
+import VoiceScreen    from '../screens/VoiceScreen';
+import HistoryScreen  from '../screens/HistoryScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import { Colors, Fonts } from '../theme';
 
 const Stack = createStackNavigator();
-const Tab = createBottomTabNavigator();
+const { width: SW } = Dimensions.get('window');
+const DRAWER_W = SW * 0.72;
 
-function CustomTabBar({ state, descriptors, navigation }) {
-  // useSafeAreaInsets — respects bottom nav bar on all Android devices
-  const insets = useSafeAreaInsets();
+// ── Drawer Context ────────────────────────────────────────
+export const DrawerContext = React.createContext({ open: () => {}, close: () => {} });
 
-  const icons  = { Chat: '💬', Voice: '🎙', History: '📜', Settings: '⚙️' };
-  const labels = { Chat: 'Chat', Voice: 'Voice', History: 'History', Settings: 'Settings' };
+// ── Drawer content ────────────────────────────────────────
+function DrawerContent({ navigation, closeDrawer, currentRoute, insets }) {
+  const items = [
+    { name: 'Chat',     icon: '💬', label: 'Chat' },
+    { name: 'Voice',    icon: '🎙',  label: 'Voice Assistant' },
+    { name: 'History',  icon: '📜',  label: 'History' },
+    { name: 'Settings', icon: '⚙️',  label: 'Settings' },
+  ];
 
   return (
-    <View style={[tabStyles.container, { paddingBottom: insets.bottom }]}>
-      {/* Purple→Teal top border */}
-      <LinearGradient
-        colors={['#8a2be2', '#00ced1']}
-        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-        style={tabStyles.topBorder}
-        pointerEvents="none"
-      />
-      <View style={tabStyles.bar}>
-        {state.routes.map((route, index) => {
-          const isFocused = state.index === index;
+    <View style={[drawerStyles.root, { paddingTop: insets.top + 16 }]}>
+      {/* Logo */}
+      <View style={drawerStyles.logoRow}>
+        <LinearGradient colors={['#8a2be2','#00ced1']} start={{ x:0, y:0 }} end={{ x:1, y:1 }} style={drawerStyles.logoCircle}>
+          <Text style={drawerStyles.logoText}>R</Text>
+        </LinearGradient>
+        <View>
+          <Text style={drawerStyles.appName}>Rebel <Text style={{ color: Colors.teal }}>AI</Text></Text>
+          <Text style={drawerStyles.appSub}>Unleash the Code.</Text>
+        </View>
+      </View>
+
+      {/* Gradient divider */}
+      <LinearGradient colors={['#8a2be2','#00ced1']} start={{ x:0, y:0 }} end={{ x:1, y:0 }} style={drawerStyles.divider} />
+
+      {/* Nav items */}
+      <View style={drawerStyles.navList}>
+        {items.map(item => {
+          const isActive = currentRoute === item.name;
           return (
             <TouchableOpacity
-              key={route.key}
-              style={tabStyles.tab}
-              onPress={() => { if (!isFocused) navigation.navigate(route.name); }}
-              activeOpacity={0.8}
+              key={item.name}
+              style={[drawerStyles.navItem, isActive && drawerStyles.navItemActive]}
+              onPress={() => { closeDrawer(); navigation.navigate(item.name); }}
+              activeOpacity={0.75}
             >
-              {isFocused ? (
+              {isActive ? (
                 <LinearGradient
-                  colors={['rgba(138,43,226,0.18)', 'rgba(0,206,209,0.12)']}
-                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                  style={tabStyles.activeWrap}
+                  colors={['rgba(138,43,226,0.22)','rgba(0,206,209,0.12)']}
+                  start={{ x:0, y:0 }} end={{ x:1, y:0 }}
+                  style={drawerStyles.navItemGrad}
                 >
-                  <Text style={tabStyles.icon}>{icons[route.name]}</Text>
-                  <Text style={[tabStyles.label, tabStyles.labelActive]}>{labels[route.name]}</Text>
+                  <Text style={drawerStyles.navIcon}>{item.icon}</Text>
+                  <Text style={[drawerStyles.navLabel, drawerStyles.navLabelActive]}>{item.label}</Text>
+                  {/* Active indicator bar */}
+                  <View style={drawerStyles.activeBar} />
                 </LinearGradient>
               ) : (
-                <View style={tabStyles.inactiveWrap}>
-                  <Text style={[tabStyles.icon, tabStyles.iconInactive]}>{icons[route.name]}</Text>
-                  <Text style={tabStyles.label}>{labels[route.name]}</Text>
+                <View style={drawerStyles.navItemInner}>
+                  <Text style={[drawerStyles.navIcon, { opacity: 0.6 }]}>{item.icon}</Text>
+                  <Text style={drawerStyles.navLabel}>{item.label}</Text>
                 </View>
               )}
             </TouchableOpacity>
           );
         })}
       </View>
+
+      {/* Bottom version */}
+      <View style={[drawerStyles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+        <LinearGradient colors={['#8a2be2','#00ced1']} start={{ x:0, y:0 }} end={{ x:1, y:0 }} style={drawerStyles.divider} />
+        <Text style={drawerStyles.footerText}>Rebel AI v1.0 · Built by Rebel Bhaiya</Text>
+      </View>
     </View>
   );
 }
 
-function MainTabs() {
+// ── Custom Drawer wrapper ─────────────────────────────────
+function DrawerNavigator({ children, navigation, currentRoute }) {
+  const insets = useSafeAreaInsets();
+  const slideX  = useRef(new Animated.Value(-DRAWER_W)).current;
+  const bgOpacity = useRef(new Animated.Value(0)).current;
+  const isOpen  = useRef(false);
+
+  function openDrawer() {
+    isOpen.current = true;
+    Animated.parallel([
+      Animated.spring(slideX, { toValue: 0, friction: 8, tension: 65, useNativeDriver: true }),
+      Animated.timing(bgOpacity, { toValue: 1, duration: 250, useNativeDriver: true }),
+    ]).start();
+  }
+
+  function closeDrawer() {
+    Animated.parallel([
+      Animated.timing(slideX, { toValue: -DRAWER_W, duration: 220, useNativeDriver: true }),
+      Animated.timing(bgOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+    ]).start(() => { isOpen.current = false; });
+  }
+
   return (
-    <Tab.Navigator
-      tabBar={props => <CustomTabBar {...props} />}
-      screenOptions={{ headerShown: false }}
-    >
-      <Tab.Screen name="Chat" component={ChatScreen} />
-      <Tab.Screen name="Voice" component={VoiceScreen} />
-      <Tab.Screen name="History" component={HistoryScreen} />
-      <Tab.Screen name="Settings" component={SettingsScreen} />
-    </Tab.Navigator>
+    <DrawerContext.Provider value={{ open: openDrawer, close: closeDrawer }}>
+      <View style={{ flex: 1 }}>
+        {children}
+
+        {/* Backdrop */}
+        <Animated.View
+          style={[drawerStyles.backdrop, { opacity: bgOpacity }]}
+          pointerEvents="none"
+        >
+          <TouchableOpacity style={{ flex: 1 }} onPress={closeDrawer} activeOpacity={1} />
+        </Animated.View>
+
+        {/* Drawer panel */}
+        <Animated.View style={[drawerStyles.drawer, { transform: [{ translateX: slideX }] }]}>
+          <DrawerContent
+            navigation={navigation}
+            closeDrawer={closeDrawer}
+            currentRoute={currentRoute}
+            insets={insets}
+          />
+        </Animated.View>
+      </View>
+    </DrawerContext.Provider>
+  );
+}
+
+// ── Main App stack ────────────────────────────────────────
+function MainApp({ navigation }) {
+  const [currentRoute, setCurrentRoute] = React.useState('Chat');
+  const Stack2 = createStackNavigator();
+
+  return (
+    <DrawerNavigator navigation={navigation} currentRoute={currentRoute}>
+      <Stack2.Navigator
+        screenOptions={{ headerShown: false }}
+        screenListeners={{ state: e => {
+          const routes = e.data?.state?.routes;
+          if (routes?.length) setCurrentRoute(routes[routes.length - 1].name);
+        }}}
+      >
+        <Stack2.Screen name="Chat"     component={ChatScreen} />
+        <Stack2.Screen name="Voice"    component={VoiceScreen} />
+        <Stack2.Screen name="History"  component={HistoryScreen} />
+        <Stack2.Screen name="Settings" component={SettingsScreen} />
+      </Stack2.Navigator>
+    </DrawerNavigator>
   );
 }
 
@@ -86,9 +168,7 @@ export default function AppNavigation() {
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
-          cardStyleInterpolator: ({ current }) => ({
-            cardStyle: { opacity: current.progress },
-          }),
+          cardStyleInterpolator: ({ current }) => ({ cardStyle: { opacity: current.progress } }),
           transitionSpec: {
             open:  { animation: 'timing', config: { duration: 280 } },
             close: { animation: 'timing', config: { duration: 220 } },
@@ -97,34 +177,61 @@ export default function AppNavigation() {
       >
         <Stack.Screen name="Splash" component={SplashScreen} />
         <Stack.Screen name="Auth"   component={AuthScreen} />
-        <Stack.Screen name="Main"   component={MainTabs} />
+        <Stack.Screen name="Main"   component={MainApp} />
       </Stack.Navigator>
     </NavigationContainer>
   );
 }
 
-const tabStyles = StyleSheet.create({
-  container: {
-    backgroundColor: '#121212',
-    borderTopWidth: 0,
+const drawerStyles = StyleSheet.create({
+  // Drawer panel
+  drawer: {
+    position: 'absolute', top: 0, left: 0, bottom: 0,
+    width: DRAWER_W, backgroundColor: '#1a1a1a',
+    zIndex: 999,
+    shadowColor: '#000', shadowOffset: { width: 4, height: 0 },
+    shadowOpacity: 0.5, shadowRadius: 16, elevation: 20,
   },
-  topBorder: { height: 1.5 },
-  bar: {
-    flexDirection: 'row',
-    paddingTop: 6,
-    paddingBottom: 10,
-    paddingHorizontal: 8,
+  root: { flex: 1, paddingHorizontal: 16 },
+
+  // Backdrop
+  backdrop: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.55)', zIndex: 998,
   },
-  tab: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  activeWrap: {
-    alignItems: 'center', paddingVertical: 7, paddingHorizontal: 12,
-    borderRadius: 14, gap: 3,
+
+  // Logo
+  logoRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 20 },
+  logoCircle: { width: 46, height: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  logoText: { color: '#fff', fontSize: 22, fontWeight: '900' },
+  appName: { color: Colors.text, fontSize: Fonts.size.lg, fontWeight: '800' },
+  appSub: { color: Colors.textMuted, fontSize: Fonts.size.xs, marginTop: 2 },
+
+  // Divider
+  divider: { height: 1.5, borderRadius: 2, marginBottom: 16, opacity: 0.6 },
+
+  // Nav items
+  navList: { gap: 4 },
+  navItem: { borderRadius: 14, overflow: 'hidden' },
+  navItemActive: {},
+  navItemGrad: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    paddingHorizontal: 16, paddingVertical: 14, borderRadius: 14,
+    position: 'relative',
   },
-  inactiveWrap: {
-    alignItems: 'center', paddingVertical: 7, paddingHorizontal: 12, gap: 3,
+  navItemInner: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    paddingHorizontal: 16, paddingVertical: 14,
   },
-  icon: { fontSize: 20 },
-  iconInactive: { opacity: 0.6 },
-  label: { fontSize: Fonts.size.xs, color: Colors.textMuted, fontWeight: '500' },
-  labelActive: { color: Colors.teal, fontWeight: '700' },
+  navIcon: { fontSize: 20, width: 26, textAlign: 'center' },
+  navLabel: { color: Colors.textSecondary, fontSize: Fonts.size.md, fontWeight: '500', flex: 1 },
+  navLabelActive: { color: Colors.text, fontWeight: '700' },
+  activeBar: {
+    position: 'absolute', right: 0, top: '20%', bottom: '20%',
+    width: 3, borderRadius: 2, backgroundColor: Colors.teal,
+  },
+
+  // Footer
+  footer: { marginTop: 'auto', paddingTop: 16 },
+  footerText: { color: Colors.textMuted, fontSize: Fonts.size.xs, textAlign: 'center', marginTop: 10 },
 });

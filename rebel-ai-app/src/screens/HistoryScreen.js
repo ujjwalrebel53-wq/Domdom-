@@ -6,11 +6,13 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LinearGradient from 'react-native-linear-gradient';
+import { DrawerContext } from '../navigation';
 import { Colors, Fonts, Radius } from '../theme';
 import { getChatHistory, clearChatHistory, getCurrentUser } from '../utils/storage';
 
 export default function HistoryScreen() {
   const insets = useSafeAreaInsets();
+  const drawer = React.useContext(DrawerContext);
   const [history, setHistory] = useState([]);
   const [filtered, setFiltered] = useState([]);
   const [user, setUser] = useState(null);
@@ -86,15 +88,21 @@ export default function HistoryScreen() {
       {/* Header */}
       <View style={[styles.headerWrap, { paddingTop: insets.top }]}>
         <View style={styles.header}>
-          <View>
-            <Text style={styles.title}>Chat <Text style={{ color: Colors.teal }}>History</Text></Text>
-            <Text style={styles.subtitle}>{filtered.length} of {history.length} messages</Text>
+          {/* Hamburger */}
+          <TouchableOpacity onPress={() => drawer.open()} style={styles.hamBtn} activeOpacity={0.7} hitSlop={{ top:10,bottom:10,left:10,right:10 }}>
+            <View style={styles.hamLine} /><View style={[styles.hamLine,{width:18}]} /><View style={styles.hamLine} />
+          </TouchableOpacity>
+          <View style={{ flex:1, flexDirection:'row', alignItems:'center', justifyContent:'space-between', marginLeft:10 }}>
+            <View>
+              <Text style={styles.title}>Chat <Text style={{ color: Colors.teal }}>History</Text></Text>
+              <Text style={styles.subtitle}>{filtered.length} of {history.length} messages</Text>
+            </View>
+            {history.length > 0 && (
+              <TouchableOpacity onPress={confirmClear} style={styles.clearBtn} activeOpacity={0.75}>
+                <Text style={styles.clearTxt}>🗑 Clear</Text>
+              </TouchableOpacity>
+            )}
           </View>
-          {history.length > 0 && (
-            <TouchableOpacity onPress={confirmClear} style={styles.clearBtn} activeOpacity={0.75}>
-              <Text style={styles.clearTxt}>🗑 Clear</Text>
-            </TouchableOpacity>
-          )}
         </View>
         <LinearGradient colors={['#8a2be2', '#00ced1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.headerLine} />
       </View>
@@ -179,9 +187,11 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.bg },
   headerWrap: { backgroundColor: Colors.bgCard },
   header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 18, paddingTop: 16, paddingBottom: 14,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 14, paddingTop: 14, paddingBottom: 14,
   },
+  hamBtn: { padding: 4, gap: 5, justifyContent: 'center' },
+  hamLine: { width: 22, height: 2.5, backgroundColor: Colors.text, borderRadius: 2 },
   headerLine: { height: 2 },
   title: { color: Colors.text, fontSize: Fonts.size.xl, fontWeight: '800' },
   subtitle: { color: Colors.textMuted, fontSize: Fonts.size.xs, marginTop: 3 },

@@ -6,6 +6,7 @@ import {
   Share, Clipboard, ScrollView, Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { DrawerContext } from '../navigation';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import LinearGradient from 'react-native-linear-gradient';
@@ -324,6 +325,7 @@ function SuggestionChips({ aiReply, onSelect }) {
 // ── Main screen ──────────────────────────────────────────
 export default function ChatScreen() {
   const insets = useSafeAreaInsets();
+  const drawer = React.useContext(DrawerContext);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -497,7 +499,15 @@ export default function ChatScreen() {
 
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <View style={styles.headerLeft}>
+        {/* ☰ Hamburger — opens drawer */}
+        <TouchableOpacity onPress={() => drawer.open()} style={styles.hamburgerBtn} activeOpacity={0.7} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <View style={styles.hamburgerLine} />
+          <View style={[styles.hamburgerLine, { width: 18 }]} />
+          <View style={styles.hamburgerLine} />
+        </TouchableOpacity>
+
+        {/* Center: avatar + name */}
+        <View style={styles.headerCenter}>
           <LinearGradient colors={['#8a2be2', '#00ced1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.headerAvatar}>
             <Text style={styles.headerAvatarText}>R</Text>
           </LinearGradient>
@@ -509,6 +519,8 @@ export default function ChatScreen() {
             </View>
           </View>
         </View>
+
+        {/* New Chat button */}
         <TouchableOpacity onPress={confirmClear} style={styles.newChatBtn} activeOpacity={0.8}>
           <LinearGradient colors={['rgba(138,43,226,0.18)', 'rgba(0,206,209,0.12)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.newChatGrad}>
             <Text style={styles.newChatText}>✚ New</Text>
@@ -621,11 +633,14 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.bg },
 
   header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 14, paddingTop: 10, paddingBottom: 12,
     borderBottomWidth: 1, borderColor: 'rgba(138,43,226,0.2)', backgroundColor: Colors.bgCard,
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  headerCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 10 },
+  hamburgerBtn: { padding: 6, gap: 5, justifyContent: 'center' },
+  hamburgerLine: { width: 22, height: 2.5, backgroundColor: Colors.text, borderRadius: 2 },
   headerAvatar: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', shadowColor: '#8a2be2', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 10, elevation: 8 },
   headerAvatarText: { color: '#fff', fontSize: 18, fontWeight: '900' },
   headerTitle: { color: Colors.text, fontSize: Fonts.size.md, fontWeight: '800' },
